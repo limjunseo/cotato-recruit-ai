@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Application {
+  application_id        BigInt              @id @default(autoincrement()) @map("application_id")
+  generation_id         BigInt              @map("generation_id")
+  user_id               BigInt              @map("user_id")
+  name                  String              @db.VarChar(255)
+  birth_date            DateTime?           @db.Date
+  phone_number          String?             @map("phone_number") @db.VarChar(255)
+  university            String?             @db.VarChar(255)
+  major                 String?             @db.VarChar(255)
+  completed_semesters   Int?                @map("completed_semesters")
+  gender                String?             @db.VarChar(255)
+  application_part_type ApplicationPartType @map("application_part_type")
+  pass_status           PassStatus?         @default(PENDING) @map("pass_status")
+  is_enrolled           Boolean?            @default(dbgenerated("b'1'")) @map("is_enrolled") @db.Bit(1)
+  is_prev_activity      Boolean?            @default(dbgenerated("b'0'")) @map("is_prev_activity") @db.Bit(1)
+  is_submitted          Boolean?            @default(dbgenerated("b'0'")) @map("is_submitted") @db.Bit(1)
+  submitted_at          DateTime?           @map("submitted_at") @db.DateTime(6)
+  pdf_file_key          String?             @map("pdf_file_key") @db.VarChar(255)
+  pdf_file_url          String?             @map("pdf_file_url") @db.Text
+  answers               ApplicationAnswer[]
+
+  @@map("applications")
+}
+
+model ApplicationAnswer {
+  answer_id      BigInt      @id @default(autoincrement()) @map("answer_id")
+  application_id BigInt      @map("application_id")
+  question_id    BigInt      @map("question_id")
+  content        String?     @db.Text
+  application    Application @relation(fields: [application_id], references: [application_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_answer_application")
+  question       Question    @relation(fields: [question_id], references: [question_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_answer_question")
+
+  @@index([application_id], map: "fk_answer_application")
+  @@index([question_id], map: "fk_answer_question")
+  @@map("application_answers")
+}
+
+model Question {
+  question_id   BigInt              @id @default(autoincrement()) @map("question_id")
+  generation_id BigInt              @map("generation_id")
+  sequence      Int
+  question_type ApplicationPartType @map("question_type")
+  content       String              @db.VarChar(255)
+  max_length    Int?                @default(500) @map("max_length")
+  answers       ApplicationAnswer[]
+
+  @@map("questions")
+}
+
+enum ApplicationPartType {
+  BE
+  DE
+  FE
+  PM
+}
+
+enum PassStatus {
+  FAIL
+  PASS
+  PENDING
+  WAITLISTED
+}
