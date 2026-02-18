@@ -131,7 +131,7 @@ export function ApplicationsClient() {
 
     setActionError(null);
     try {
-      await sendSelectedToNotion(selectedMap);
+      await sendSelectedToNotion(selectedMap, { syncTrigger: "dashboard-batch" });
     } catch (sendError) {
       setActionError(sendError instanceof Error ? sendError.message : "Failed to send selected applications.");
     }
@@ -166,7 +166,7 @@ export function ApplicationsClient() {
           };
           return acc;
         }, {});
-        const autoSendResult = await sendSelectedToNotion(autoSelectedMap);
+        const autoSendResult = await sendSelectedToNotion(autoSelectedMap, { syncTrigger: "rds-pull" });
         autoSendMessage = `Auto Notion sync completed: ${autoSendResult.success} success, ${autoSendResult.skipped} skipped, ${autoSendResult.failed} failed (total ${autoSendResult.total}).`;
       }
 

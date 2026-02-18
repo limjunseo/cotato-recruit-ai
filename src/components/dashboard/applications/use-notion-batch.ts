@@ -3,6 +3,7 @@ import { INITIAL_BATCH_PROGRESS } from "@/components/dashboard/applications/cons
 import { fetchAllFilteredApplications, sendApplicationToNotion } from "@/components/dashboard/applications/services";
 import { displayName } from "@/components/dashboard/applications/utils";
 import type { BatchItemResult, BatchProgress, SelectedApplicationMap } from "@/components/dashboard/applications/types";
+import type { NotionSyncTrigger } from "@/discord";
 import type { ApplicationFilters } from "@/types/application";
 
 export function useNotionBatch() {
@@ -39,6 +40,9 @@ export function useNotionBatch() {
 
   const sendSelectedToNotion = async (
     selectedMap: SelectedApplicationMap,
+    options?: {
+      syncTrigger?: NotionSyncTrigger;
+    },
   ): Promise<{ total: number; success: number; skipped: number; failed: number }> => {
     const targets = Object.values(selectedMap);
     if (targets.length === 0 || batchProgress.isRunning) {
@@ -72,6 +76,8 @@ export function useNotionBatch() {
     let failed = 0;
     const results: BatchItemResult[] = [];
 
+    const syncTrigger = options?.syncTrigger ?? "dashboard-batch";
+
     for (const target of targets) {
       setBatchProgress((prev) => ({
         ...prev,
@@ -85,7 +91,7 @@ export function useNotionBatch() {
       });
 
       try {
-        const payload = await sendApplicationToNotion(target.applicationId);
+        const payload = await sendApplicationToNotion(target.applicationId, undefined, syncTrigger);
         if (payload.skipped) {
           console.info("[batch-send] item skipped", {
             applicationId: target.applicationId,

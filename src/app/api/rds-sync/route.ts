@@ -3,6 +3,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { NextResponse } from "next/server";
 import { getApplicationById } from "@/lib/applications";
+import { sendDiscordNotionSyncNotification } from "@/discord";
 import { prisma } from "@/lib/prisma";
 import {
   completeRdsSyncRunLogFailure,
@@ -190,7 +191,7 @@ async function syncApplicationsToNotion(applicationIds: string[]): Promise<Notio
         "LLM interview question generation",
       );
 
-      await withTimeout(
+      const notion = await withTimeout(
         createNotionApplicationPage(application, generated),
         NOTION_UPSERT_TIMEOUT_MS,
         "Notion page upsert",
@@ -203,6 +204,20 @@ async function syncApplicationsToNotion(applicationIds: string[]): Promise<Notio
           notion_synced_at: new Date(),
         },
       });
+
+      try {
+        await sendDiscordNotionSyncNotification({
+          trigger: "cron",
+          application,
+          generatedResults: generated,
+          notionPageUrl: notion.pageUrl,
+        });
+      } catch (discordError) {
+        console.error("[rds-sync:notion] discord notification failed", {
+          applicationId,
+          error: discordError instanceof Error ? discordError.message : discordError,
+        });
+      }
 
       success += 1;
       console.info("[rds-sync:notion] item succeeded", {

@@ -9,6 +9,7 @@ import type {
   RdsSyncLogsResponse,
   RdsSyncResponse,
 } from "@/components/dashboard/applications/types";
+import type { NotionSyncTrigger } from "@/discord";
 import type { ApplicationFilters, ApplicationListItem, ApplicationListResponse } from "@/types/application";
 
 const BATCH_SEND_TIMEOUT_MS = 300_000;
@@ -111,6 +112,7 @@ export async function fetchRdsSyncLogs(limit = 10, signal?: AbortSignal): Promis
 export async function sendApplicationToNotion(
   applicationId: string,
   questionCount = DEFAULT_BATCH_QUESTION_COUNT,
+  syncTrigger: NotionSyncTrigger = "manual",
 ): Promise<NotionSendResponse> {
   const timeout = createTimeoutController(BATCH_SEND_TIMEOUT_MS);
   const startedAt = Date.now();
@@ -123,6 +125,7 @@ export async function sendApplicationToNotion(
       },
       body: JSON.stringify({
         questionCount,
+        syncTrigger,
       }),
       signal: timeout.signal,
     });

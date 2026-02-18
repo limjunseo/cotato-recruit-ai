@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getApplicationById } from "@/lib/applications";
 import { generateInterviewQuestionsByAnswer } from "@/llm";
 import { prisma } from "@/lib/prisma";
+import { sendDiscordNotionSyncNotification, type NotionSyncTrigger } from "@/discord";
 import { createNotionApplicationPage } from "@/notion";
 
 type ParamsContext = {
@@ -11,6 +12,7 @@ type ParamsContext = {
 
 const bodySchema = z.object({
   questionCount: z.number().int().min(1).max(3).optional(),
+  syncTrigger: z.enum(["rds-pull", "dashboard-batch", "manual"]).optional(),
 });
 
 export const dynamic = "force-dynamic";
@@ -42,6 +44,7 @@ export async function POST(request: Request, context: ParamsContext) {
   }
 
   let questionCount = 3;
+  let syncTrigger: NotionSyncTrigger = "manual";
   try {
     const body = (await request.json()) as unknown;
     const parsed = bodySchema.safeParse(body);
@@ -50,6 +53,9 @@ export async function POST(request: Request, context: ParamsContext) {
     }
     if (parsed.data.questionCount) {
       questionCount = parsed.data.questionCount;
+    }
+    if (parsed.data.syncTrigger) {
+      syncTrigger = parsed.data.syncTrigger;
     }
   } catch {
     // Keep defaults if no JSON body exists.
@@ -105,6 +111,23 @@ export async function POST(request: Request, context: ParamsContext) {
         notion_synced_at: new Date(),
       },
     });
+
+    if (syncTrigger === "rds-pull") {
+      try {
+        await sendDiscordNotionSyncNotification({
+          trigger: syncTrigger,
+          application,
+          generatedResults: results,
+          notionPageUrl: notion.pageUrl,
+        });
+      } catch (discordError) {
+        console.error("[api:notion] discord notification failed", {
+          requestId,
+          applicationId: id,
+          error: discordError instanceof Error ? discordError.message : discordError,
+        });
+      }
+    }
 
     return NextResponse.json({
       pageId: notion.pageId,
