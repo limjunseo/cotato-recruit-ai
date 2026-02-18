@@ -42,6 +42,10 @@ function parseFilters(rawParams: Record<string, string | undefined>): Applicatio
 function buildWhere(filters: ApplicationFilters): Prisma.ApplicationWhereInput {
   const submittedFrom = parseDate(filters.submittedFrom);
   const submittedTo = parseDate(filters.submittedTo);
+  const notionSynced = toBooleanFilter(filters.notionExists);
+  const submitted = toBooleanFilter(filters.submitted);
+  const enrolled = toBooleanFilter(filters.enrolled);
+  const prevActivity = toBooleanFilter(filters.prevActivity);
 
   if (submittedTo) {
     submittedTo.setHours(23, 59, 59, 999);
@@ -50,11 +54,10 @@ function buildWhere(filters: ApplicationFilters): Prisma.ApplicationWhereInput {
   const where: Prisma.ApplicationWhereInput = {
     ...(filters.part !== "ALL" ? { application_part_type: filters.part } : {}),
     ...(filters.passStatus !== "ALL" ? { pass_status: filters.passStatus } : {}),
-    ...(toBooleanFilter(filters.submitted) !== undefined ? { is_submitted: toBooleanFilter(filters.submitted) } : {}),
-    ...(toBooleanFilter(filters.enrolled) !== undefined ? { is_enrolled: toBooleanFilter(filters.enrolled) } : {}),
-    ...(toBooleanFilter(filters.prevActivity) !== undefined
-      ? { is_prev_activity: toBooleanFilter(filters.prevActivity) }
-      : {}),
+    ...(submitted !== undefined ? { is_submitted: submitted } : {}),
+    ...(enrolled !== undefined ? { is_enrolled: enrolled } : {}),
+    ...(prevActivity !== undefined ? { is_prev_activity: prevActivity } : {}),
+    ...(notionSynced !== undefined ? { is_synced_to_notion: notionSynced } : {}),
     ...(filters.generationId && /^\d+$/.test(filters.generationId)
       ? { generation_id: BigInt(filters.generationId) }
       : {}),

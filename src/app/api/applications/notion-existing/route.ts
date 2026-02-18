@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { findApplicationExistenceByContact } from "@/notion";
 
 const bodySchema = z.object({
   applicationIds: z.array(z.string().regex(/^\d+$/)).min(1).max(200),
@@ -24,29 +23,21 @@ export async function POST(request: Request) {
         application_id: {
           in: uniqueIds.map((id) => BigInt(id)),
         },
+        is_synced_to_notion: true,
       },
       select: {
         application_id: true,
-        application_part_type: true,
-        phone_number: true,
       },
     });
 
-    const existence = await findApplicationExistenceByContact(
-      rows.map((row) => ({
-        applicationId: row.application_id.toString(),
-        applicationPartType: row.application_part_type,
-        phoneNumber: row.phone_number,
-      })),
-    );
+    const existingApplicationIds = rows.map((row) => row.application_id.toString());
 
     return NextResponse.json({
-      existence,
-      existingApplicationIds: existence.filter((item) => item.isExists).map((item) => item.applicationId),
+      existingApplicationIds,
     });
   } catch (error) {
     return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Failed to check existing Notion contacts." },
+      { message: error instanceof Error ? error.message : "Failed to check synced applications." },
       { status: 500 },
     );
   }
