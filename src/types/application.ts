@@ -11,6 +11,7 @@ export type ApplicationListItem = {
   completedSemesters: number | null;
   isEnrolled: boolean | null;
   isSubmitted: boolean | null;
+  isSyncedToNotion: boolean;
   name: string | null;
   passStatus: PassStatus | null;
   submittedAt: string | null;
@@ -28,6 +29,8 @@ export type ApplicationDetail = {
   isEnrolled: boolean | null;
   isPrevActivity: boolean | null;
   isSubmitted: boolean | null;
+  isSyncedToNotion: boolean;
+  notionSyncedAt: string | null;
   major: string | null;
   name: string | null;
   passStatus: PassStatus | null;

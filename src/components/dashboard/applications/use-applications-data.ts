@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { DEFAULT_FILTERS } from "@/components/dashboard/applications/constants";
-import {
-  fetchAllFilteredApplications,
-  fetchApplications,
-  filterApplicationsByNotionExistence,
-} from "@/components/dashboard/applications/services";
+import { fetchApplications } from "@/components/dashboard/applications/services";
 import { buildQueryString } from "@/components/dashboard/applications/utils";
 import type { ApplicationFilters, ApplicationListItem } from "@/types/application";
 
@@ -25,18 +21,9 @@ export function useApplicationsData() {
       setError(null);
 
       try {
-        if (filters.notionExists === "all") {
-          const payload = await fetchApplications(filters, controller.signal);
-          setItems(payload.items);
-          setTotal(payload.total);
-          return;
-        }
-
-        const allFiltered = await fetchAllFilteredApplications(filters);
-        const notionFiltered = await filterApplicationsByNotionExistence(allFiltered, filters.notionExists);
-        const offset = (filters.page - 1) * filters.pageSize;
-        setItems(notionFiltered.slice(offset, offset + filters.pageSize));
-        setTotal(notionFiltered.length);
+        const payload = await fetchApplications(filters, controller.signal);
+        setItems(payload.items);
+        setTotal(payload.total);
       } catch (fetchError) {
         if (controller.signal.aborted) return;
         setError(fetchError instanceof Error ? fetchError.message : "Unknown error occurred.");

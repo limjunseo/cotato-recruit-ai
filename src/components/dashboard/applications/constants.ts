@@ -18,7 +18,6 @@ export const DEFAULT_FILTERS: ApplicationFilters = {
 
 export const BATCH_PAGE_SIZE = 100;
 export const DEFAULT_BATCH_QUESTION_COUNT = 3;
-export const NOTION_EXISTENCE_CHECK_CHUNK_SIZE = 200;
 
 export const INITIAL_BATCH_PROGRESS: BatchProgress = {
   isRunning: false,

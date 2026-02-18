@@ -78,7 +78,7 @@ export function ApplicationsFiltersCard({ filters, totalLabel, onChangeFilters }
           </label>
 
           <label className="space-y-1">
-            <span className="text-xs font-medium text-[color:var(--muted-foreground)]">Notion Exists</span>
+            <span className="text-xs font-medium text-[color:var(--muted-foreground)]">Synced to Notion</span>
             <Select
               value={filters.notionExists}
               onChange={(event) =>

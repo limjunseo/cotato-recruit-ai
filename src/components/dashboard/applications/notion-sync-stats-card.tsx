@@ -30,7 +30,7 @@ export function NotionSyncStatsCard({ totalApplicants, notionSyncedApplicants, i
             <BarChart3 className="h-5 w-5 text-cyan-700" />
             Notion Sync Overview
           </CardTitle>
-          <CardDescription>Live sync status across all applicants</CardDescription>
+          <CardDescription>Local sync status across all applicants</CardDescription>
         </div>
       </CardHeader>
 

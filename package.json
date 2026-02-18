@@ -9,7 +9,11 @@
     "lint": "eslint",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
-    "db:pull": "prisma db pull"
+    "db:pull": "prisma db pull",
+    "db:sync:rds:applications": "node scripts/sync-rds-applications.mjs",
+    "db:sync:rds:questions": "node scripts/sync-rds-questions.mjs",
+    "db:sync:rds:answers": "node scripts/sync-rds-answers.mjs",
+    "db:sync:rds": "node scripts/sync-rds-to-local.mjs"
   },
   "dependencies": {
     "@notionhq/client": "^5.9.0",

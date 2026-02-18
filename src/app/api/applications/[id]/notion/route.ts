@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApplicationById } from "@/lib/applications";
 import { generateInterviewQuestionsByAnswer } from "@/llm";
+import { prisma } from "@/lib/prisma";
 import { createNotionApplicationPage } from "@/notion";
 
 type ParamsContext = {
@@ -95,6 +96,14 @@ export async function POST(request: Request, context: ParamsContext) {
       requestId,
       applicationId: id,
       elapsedMs: Date.now() - startedAt,
+    });
+
+    await prisma.application.update({
+      where: { application_id: BigInt(id) },
+      data: {
+        is_synced_to_notion: true,
+        notion_synced_at: new Date(),
+      },
     });
 
     return NextResponse.json({
