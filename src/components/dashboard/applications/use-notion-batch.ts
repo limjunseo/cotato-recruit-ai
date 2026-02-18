@@ -1,10 +1,6 @@
 import { useMemo, useState } from "react";
 import { INITIAL_BATCH_PROGRESS } from "@/components/dashboard/applications/constants";
-import {
-  fetchAllFilteredApplications,
-  filterOutNotionExistingApplications,
-  sendApplicationToNotion,
-} from "@/components/dashboard/applications/services";
+import { fetchAllFilteredApplications, sendApplicationToNotion } from "@/components/dashboard/applications/services";
 import { displayName } from "@/components/dashboard/applications/utils";
 import type { BatchItemResult, BatchProgress, SelectedApplicationMap } from "@/components/dashboard/applications/types";
 import type { ApplicationFilters } from "@/types/application";
@@ -22,11 +18,13 @@ export function useNotionBatch() {
     setIsSelectingFiltered(true);
 
     try {
-      const allFiltered = await fetchAllFilteredApplications(filters);
-      const notionMissingOnly = await filterOutNotionExistingApplications(allFiltered);
+      const allFiltered = await fetchAllFilteredApplications({
+        ...filters,
+        notionExists: "no",
+      });
       const nextSelection: SelectedApplicationMap = {};
 
-      for (const item of notionMissingOnly) {
+      for (const item of allFiltered) {
         nextSelection[item.applicationId] = {
           applicationId: item.applicationId,
           name: displayName(item),
@@ -90,7 +88,7 @@ export function useNotionBatch() {
             name: target.name,
             status: "skipped",
             pageUrl: payload.pageUrl,
-            message: "Already exists in Notion (matched by contact).",
+            message: "Already synced to Notion.",
             elapsedMs: Date.now() - itemStartedAt,
           });
         } else {

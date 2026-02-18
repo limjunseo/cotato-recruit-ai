@@ -100,7 +100,7 @@ export function ApplicationsClient() {
           <div>
             <CardTitle className="text-xl">Batch Send</CardTitle>
             <CardDescription>
-              Select filtered applicants and send to Notion in batch. Existing Notion contacts are excluded automatically.
+              Select filtered applicants and send to Notion in batch. Already synced applicants are excluded automatically.
             </CardDescription>
           </div>
         </CardHeader>
