@@ -1,7 +1,7 @@
 ﻿# Club Recruitment Admin Dashboard (MVP)
 
 Next.js App Router 기반의 내부 운영용 대시보드입니다.
-로컬에서 실행하며 MySQL의 `applications` 테이블을 조회합니다.
+운영 RDS에서 배치로 데이터를 받아 로컬 MySQL에 저장한 뒤, 로컬 DB 기준으로 지원서를 조회/노션 동기화합니다.
 
 ## 핵심 기능
 
@@ -9,6 +9,7 @@ Next.js App Router 기반의 내부 운영용 대시보드입니다.
 - 지원서 상세 조회
 - AI 면접 질문 생성 (LLM provider 선택: local 또는 Gemini)
 - 지원서 상세에서 AI 질문 생성 후 노션 전송
+- 운영 RDS -> 로컬 DB 배치 동기화 (`application_id` 기준 신규 insert)
 - 노션 이관 전 검토 단계에 맞춘 MVP 구조
 
 ## 기술 스택
@@ -35,7 +36,8 @@ cp .env.example .env
 
 필수:
 
-- `DATABASE_URL` (예: 로컬 MySQL `recruitment_to_notion`)
+- `DATABASE_URL` (로컬 MySQL `recruitment_to_notion`)
+- `SOURCE_DATABASE_URL` (운영 RDS MySQL)
 
 선택:
 
@@ -56,6 +58,10 @@ cp .env.example .env
 
 ```env
 DATABASE_URL="mysql://root:YOUR_PASSWORD@127.0.0.1:3306/recruitment_to_notion?connection_limit=5"
+SOURCE_DATABASE_URL="mysql://readonly:YOUR_PASSWORD@YOUR_RDS_HOST:3306/recruitment?connection_limit=5"
+RDS_SYNC_BATCH_SIZE="200"
+RDS_SYNC_MAX_BATCHES="0"
+RDS_SYNC_START_AFTER_ID="0"
 LLM_PROVIDER="local"
 LOCAL_LLM_ENDPOINT="http://127.0.0.1:11434/v1"
 LOCAL_LLM_MODEL="gemma3:12b"
@@ -76,6 +82,14 @@ NOTION_DATABASE_ID_PM=""
 npm run db:generate
 ```
 
+로컬 DB `applications` 테이블에 아래 컬럼이 없다면 먼저 추가하세요.
+
+```sql
+ALTER TABLE applications
+  ADD COLUMN is_synced_to_notion BOOLEAN NOT NULL DEFAULT 0,
+  ADD COLUMN notion_synced_at DATETIME(6) NULL;
+```
+
 ## 4) 개발 서버 실행
 
 ```bash
@@ -83,6 +97,29 @@ npm run dev
 ```
 
 브라우저에서 `http://localhost:3011` 접속 시 `/applications`로 이동합니다.
+
+## 운영 RDS -> 로컬 DB 배치 동기화
+
+```bash
+npm run db:sync:rds:applications
+npm run db:sync:rds:questions
+npm run db:sync:rds:answers
+# 또는 전체 순차 실행
+npm run db:sync:rds
+```
+
+동작:
+- `db:sync:rds:applications`: 제출된 지원서(`is_submitted=true`)만 읽어 신규 `applications` insert
+- `db:sync:rds:questions`: 로컬 `applications` 기준으로 필요한 `questions`(question content 포함) insert
+- `db:sync:rds:answers`: 로컬 `applications` 기준으로 필요한 `application_answers`(answer content 포함) insert
+- `db:sync:rds`: 위 3개를 순서대로 실행
+- 신규 지원서는 `is_synced_to_notion=false`, `notion_synced_at=null`로 저장
+
+`applications`는 노션 동기화에 필요한 최소 컬럼만 조회/저장합니다.
+- `application_id`, `generation_id`, `user_id`, `name`
+- `birth_date`, `phone_number`, `university`, `major`, `gender`
+- `application_part_type`, `pass_status`
+- `is_submitted`, `submitted_at`
 
 ## 사용 API
 
@@ -127,6 +164,8 @@ Prisma 모델은 아래 컬럼만 사용합니다.
 - `university`
 - `generation_id`
 - `user_id`
+- `is_synced_to_notion`
+- `notion_synced_at`
 
 ## 유틸 스크립트
 
@@ -134,5 +173,9 @@ Prisma 모델은 아래 컬럼만 사용합니다.
 npm run db:generate
 npm run db:pull
 npm run db:studio
+npm run db:sync:rds:applications
+npm run db:sync:rds:questions
+npm run db:sync:rds:answers
+npm run db:sync:rds
 ```
 
