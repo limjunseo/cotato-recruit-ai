@@ -1,5 +1,7 @@
 import { createPrismaClients, disconnectPrismaClients, resolveSyncOptions } from "./rds-sync-utils.mjs";
 
+const STEP_SUMMARY_PREFIX = "__RDS_SYNC_STEP_SUMMARY__";
+
 async function fetchSubmittedApplicationIds(sourcePrisma, cursorId, batchSize) {
   return sourcePrisma.application.findMany({
     where: {
@@ -57,6 +59,7 @@ async function syncQuestionBatch(sourcePrisma, localPrisma, cursorId, batchSize)
       nextCursorId: cursorId,
       readCount: 0,
       insertedQuestions: 0,
+      insertedQuestionIds: [],
     };
   }
 
@@ -70,6 +73,7 @@ async function syncQuestionBatch(sourcePrisma, localPrisma, cursorId, batchSize)
       nextCursorId,
       readCount: sourceApplicationRows.length,
       insertedQuestions: 0,
+      insertedQuestionIds: [],
     };
   }
 
@@ -80,6 +84,7 @@ async function syncQuestionBatch(sourcePrisma, localPrisma, cursorId, batchSize)
       nextCursorId,
       readCount: sourceApplicationRows.length,
       insertedQuestions: 0,
+      insertedQuestionIds: [],
     };
   }
 
@@ -105,11 +110,36 @@ async function syncQuestionBatch(sourcePrisma, localPrisma, cursorId, batchSize)
       nextCursorId,
       readCount: sourceApplicationRows.length,
       insertedQuestions: 0,
+      insertedQuestionIds: [],
+    };
+  }
+
+  const sourceQuestionIds = sourceQuestions.map((row) => row.question_id);
+  const existingQuestionRows = await localPrisma.question.findMany({
+    where: {
+      question_id: {
+        in: sourceQuestionIds,
+      },
+    },
+    select: {
+      question_id: true,
+    },
+  });
+  const existingQuestionIdSet = new Set(existingQuestionRows.map((row) => row.question_id.toString()));
+  const newQuestions = sourceQuestions.filter((row) => !existingQuestionIdSet.has(row.question_id.toString()));
+
+  if (newQuestions.length === 0) {
+    return {
+      done: false,
+      nextCursorId,
+      readCount: sourceApplicationRows.length,
+      insertedQuestions: 0,
+      insertedQuestionIds: [],
     };
   }
 
   const result = await localPrisma.question.createMany({
-    data: sourceQuestions,
+    data: newQuestions,
     skipDuplicates: true,
   });
 
@@ -118,6 +148,7 @@ async function syncQuestionBatch(sourcePrisma, localPrisma, cursorId, batchSize)
     nextCursorId,
     readCount: sourceApplicationRows.length,
     insertedQuestions: result.count,
+    insertedQuestionIds: newQuestions.map((row) => row.question_id.toString()),
   };
 }
 
@@ -129,6 +160,7 @@ async function main() {
   let batchIndex = 0;
   let totalRead = 0;
   let totalInsertedQuestions = 0;
+  const totalInsertedQuestionIds = [];
 
   console.info("[rds-sync:questions] started", {
     batchSize,
@@ -152,6 +184,7 @@ async function main() {
       cursorId = batch.nextCursorId;
       totalRead += batch.readCount;
       totalInsertedQuestions += batch.insertedQuestions;
+      totalInsertedQuestionIds.push(...batch.insertedQuestionIds);
 
       console.info("[rds-sync:questions] batch completed", {
         batchIndex,
@@ -167,12 +200,25 @@ async function main() {
       insertedQuestions: totalInsertedQuestions,
       finalCursorId: cursorId.toString(),
     });
+
+    return {
+      step: "questions",
+      batches: batchIndex,
+      totalRead,
+      insertedCount: totalInsertedQuestions,
+      insertedIds: totalInsertedQuestionIds,
+      finalCursorId: cursorId.toString(),
+    };
   } finally {
     await disconnectPrismaClients(localPrisma, sourcePrisma);
   }
 }
 
-main().catch((error) => {
-  console.error("[rds-sync:questions] failed", error);
-  process.exitCode = 1;
-});
+main()
+  .then((summary) => {
+    console.log(`${STEP_SUMMARY_PREFIX}${JSON.stringify(summary)}`);
+  })
+  .catch((error) => {
+    console.error("[rds-sync:questions] failed", error);
+    process.exitCode = 1;
+  });

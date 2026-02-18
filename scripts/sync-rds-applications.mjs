@@ -1,5 +1,7 @@
 import { createPrismaClients, disconnectPrismaClients, resolveSyncOptions } from "./rds-sync-utils.mjs";
 
+const STEP_SUMMARY_PREFIX = "__RDS_SYNC_STEP_SUMMARY__";
+
 function toApplicationInsertData(sourceApplications) {
   return sourceApplications.map((row) => ({
     application_id: row.application_id,
@@ -54,6 +56,7 @@ async function syncApplicationBatch(sourcePrisma, localPrisma, cursorId, batchSi
       nextCursorId: cursorId,
       readCount: 0,
       insertedApplications: 0,
+      insertedApplicationIds: [],
     };
   }
 
@@ -80,6 +83,7 @@ async function syncApplicationBatch(sourcePrisma, localPrisma, cursorId, batchSi
       nextCursorId,
       readCount: sourceApplications.length,
       insertedApplications: 0,
+      insertedApplicationIds: [],
     };
   }
 
@@ -93,6 +97,7 @@ async function syncApplicationBatch(sourcePrisma, localPrisma, cursorId, batchSi
     nextCursorId,
     readCount: sourceApplications.length,
     insertedApplications: result.count,
+    insertedApplicationIds: newApplications.map((row) => row.application_id.toString()),
   };
 }
 
@@ -104,6 +109,7 @@ async function main() {
   let batchIndex = 0;
   let totalRead = 0;
   let totalInsertedApplications = 0;
+  const totalInsertedApplicationIds = [];
 
   console.info("[rds-sync:applications] started", {
     batchSize,
@@ -127,6 +133,7 @@ async function main() {
       cursorId = batch.nextCursorId;
       totalRead += batch.readCount;
       totalInsertedApplications += batch.insertedApplications;
+      totalInsertedApplicationIds.push(...batch.insertedApplicationIds);
 
       console.info("[rds-sync:applications] batch completed", {
         batchIndex,
@@ -142,12 +149,25 @@ async function main() {
       insertedApplications: totalInsertedApplications,
       finalCursorId: cursorId.toString(),
     });
+
+    return {
+      step: "applications",
+      batches: batchIndex,
+      totalRead,
+      insertedCount: totalInsertedApplications,
+      insertedIds: totalInsertedApplicationIds,
+      finalCursorId: cursorId.toString(),
+    };
   } finally {
     await disconnectPrismaClients(localPrisma, sourcePrisma);
   }
 }
 
-main().catch((error) => {
-  console.error("[rds-sync:applications] failed", error);
-  process.exitCode = 1;
-});
+main()
+  .then((summary) => {
+    console.log(`${STEP_SUMMARY_PREFIX}${JSON.stringify(summary)}`);
+  })
+  .catch((error) => {
+    console.error("[rds-sync:applications] failed", error);
+    process.exitCode = 1;
+  });

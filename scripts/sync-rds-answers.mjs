@@ -1,5 +1,7 @@
 import { createPrismaClients, disconnectPrismaClients, resolveSyncOptions } from "./rds-sync-utils.mjs";
 
+const STEP_SUMMARY_PREFIX = "__RDS_SYNC_STEP_SUMMARY__";
+
 async function fetchSubmittedApplicationIds(sourcePrisma, cursorId, batchSize) {
   return sourcePrisma.application.findMany({
     where: {
@@ -41,6 +43,7 @@ async function syncAnswerBatch(sourcePrisma, localPrisma, cursorId, batchSize) {
       nextCursorId: cursorId,
       readCount: 0,
       insertedAnswers: 0,
+      insertedAnswerIds: [],
     };
   }
 
@@ -54,6 +57,7 @@ async function syncAnswerBatch(sourcePrisma, localPrisma, cursorId, batchSize) {
       nextCursorId,
       readCount: sourceApplicationRows.length,
       insertedAnswers: 0,
+      insertedAnswerIds: [],
     };
   }
 
@@ -77,11 +81,36 @@ async function syncAnswerBatch(sourcePrisma, localPrisma, cursorId, batchSize) {
       nextCursorId,
       readCount: sourceApplicationRows.length,
       insertedAnswers: 0,
+      insertedAnswerIds: [],
+    };
+  }
+
+  const sourceAnswerIds = sourceAnswers.map((row) => row.answer_id);
+  const existingAnswerRows = await localPrisma.applicationAnswer.findMany({
+    where: {
+      answer_id: {
+        in: sourceAnswerIds,
+      },
+    },
+    select: {
+      answer_id: true,
+    },
+  });
+  const existingAnswerIdSet = new Set(existingAnswerRows.map((row) => row.answer_id.toString()));
+  const newAnswers = sourceAnswers.filter((row) => !existingAnswerIdSet.has(row.answer_id.toString()));
+
+  if (newAnswers.length === 0) {
+    return {
+      done: false,
+      nextCursorId,
+      readCount: sourceApplicationRows.length,
+      insertedAnswers: 0,
+      insertedAnswerIds: [],
     };
   }
 
   const result = await localPrisma.applicationAnswer.createMany({
-    data: sourceAnswers,
+    data: newAnswers,
     skipDuplicates: true,
   });
 
@@ -90,6 +119,7 @@ async function syncAnswerBatch(sourcePrisma, localPrisma, cursorId, batchSize) {
     nextCursorId,
     readCount: sourceApplicationRows.length,
     insertedAnswers: result.count,
+    insertedAnswerIds: newAnswers.map((row) => row.answer_id.toString()),
   };
 }
 
@@ -101,6 +131,7 @@ async function main() {
   let batchIndex = 0;
   let totalRead = 0;
   let totalInsertedAnswers = 0;
+  const totalInsertedAnswerIds = [];
 
   console.info("[rds-sync:answers] started", {
     batchSize,
@@ -124,6 +155,7 @@ async function main() {
       cursorId = batch.nextCursorId;
       totalRead += batch.readCount;
       totalInsertedAnswers += batch.insertedAnswers;
+      totalInsertedAnswerIds.push(...batch.insertedAnswerIds);
 
       console.info("[rds-sync:answers] batch completed", {
         batchIndex,
@@ -139,12 +171,25 @@ async function main() {
       insertedAnswers: totalInsertedAnswers,
       finalCursorId: cursorId.toString(),
     });
+
+    return {
+      step: "answers",
+      batches: batchIndex,
+      totalRead,
+      insertedCount: totalInsertedAnswers,
+      insertedIds: totalInsertedAnswerIds,
+      finalCursorId: cursorId.toString(),
+    };
   } finally {
     await disconnectPrismaClients(localPrisma, sourcePrisma);
   }
 }
 
-main().catch((error) => {
-  console.error("[rds-sync:answers] failed", error);
-  process.exitCode = 1;
-});
+main()
+  .then((summary) => {
+    console.log(`${STEP_SUMMARY_PREFIX}${JSON.stringify(summary)}`);
+  })
+  .catch((error) => {
+    console.error("[rds-sync:answers] failed", error);
+    process.exitCode = 1;
+  });
