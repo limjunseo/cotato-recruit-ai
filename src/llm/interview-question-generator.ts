@@ -26,14 +26,6 @@ const MAX_OUTPUT_VALIDATION_ATTEMPTS = 2;
 const OUTPUT_RETRY_DELAY_MS = 250;
 const SHORT_ANSWER_LENGTH_THRESHOLD = 35;
 
-const FALLBACK_SHORT_ANSWER_QUESTIONS = [
-  "당시 해결하려던 문제 상황과 목표를 한 문장으로 설명해 주세요.",
-  "실제로 시도한 방법 중 최종 선택한 방법과 그 근거는 무엇이었나요?",
-  "적용 후 결과를 확인한 기준(지표, 사용자 반응, 운영 안정성 등)은 무엇이었나요?",
-  "같은 문제가 다시 발생한다면 어떤 방식으로 설계를 바꾸거나 예방하시겠어요?",
-  "협업 과정에서 이 문제를 공유하고 조율한 방식이 있었다면 구체적으로 알려주세요.",
-] as const;
-
 class LlmHttpError extends Error {
   status: number;
   headers: Headers;
@@ -161,8 +153,8 @@ function validateGeneratedOutput(output: GeneratedForAnswer, questionCount: numb
   }
 
   const normalizedRequestedCount = Math.max(1, Math.min(questionCount, 3));
-  if (output.questions.length < 1 || output.questions.length > normalizedRequestedCount) {
-    return { valid: false, reason: `questions 개수는 1~${normalizedRequestedCount}개여야 합니다.` };
+  if (output.questions.length > normalizedRequestedCount) {
+    return { valid: false, reason: `questions 개수는 0~${normalizedRequestedCount}개여야 합니다.` };
   }
 
   const uniqueQuestions = new Set<string>();
@@ -186,11 +178,11 @@ function isShortAnswerContent(content: string): boolean {
   return normalizeFreeText(content).length < SHORT_ANSWER_LENGTH_THRESHOLD;
 }
 
-function buildShortAnswerFallback(questionCount: number): GeneratedForAnswer {
+function buildShortAnswerFallback(): GeneratedForAnswer {
   return {
     evaluationSummary:
       "답변 분량이 짧아 문제 상황·선택 근거·실행 결과 확인이 어려움.",
-    questions: FALLBACK_SHORT_ANSWER_QUESTIONS.slice(0, questionCount),
+    questions: [],
   };
 }
 
@@ -366,7 +358,13 @@ export async function generateQuestionsForAnswer(input: GenerateForAnswerInput):
     });
 
     if (attempt < MAX_OUTPUT_VALIDATION_ATTEMPTS) {
-      prompt = buildInterviewQuestionRepairPrompt(input.questionCount, content, lastError?.message ?? "형식 오류");
+      prompt = buildInterviewQuestionRepairPrompt(
+        input.application,
+        input.answer,
+        input.questionCount,
+        content,
+        lastError?.message ?? "형식 오류",
+      );
       await sleep(OUTPUT_RETRY_DELAY_MS);
     }
   }
@@ -377,7 +375,7 @@ export async function generateQuestionsForAnswer(input: GenerateForAnswerInput):
       answerId: input.answer.answerId,
       answerLength: normalizeFreeText(input.answer.content).length,
     });
-    return buildShortAnswerFallback(input.questionCount);
+    return buildShortAnswerFallback();
   }
 
   throw new Error(

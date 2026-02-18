@@ -102,7 +102,6 @@ function parseFromJson(content: string, questionCount: number): ParsedInterviewG
       .filter((item) => item.length > 5)
       .slice(0, questionCount);
 
-    if (questions.length === 0) return null;
     return { evaluationSummary: summary, questions };
   } catch {
     return null;

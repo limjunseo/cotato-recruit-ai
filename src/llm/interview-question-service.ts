@@ -47,10 +47,6 @@ export async function generateInterviewQuestionsByAnswer(
       runtime,
     });
 
-    if (generated.questions.length === 0) {
-      throw new Error(`AI returned no valid questions for answer_id=${answer.answerId}.`);
-    }
-
     results.push({
       answerId: answer.answerId,
       questionId: answer.questionId,
