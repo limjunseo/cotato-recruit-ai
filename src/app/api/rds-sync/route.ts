@@ -2,12 +2,16 @@ import { execFile } from "node:child_process";
 import path from "node:path";
 import { promisify } from "node:util";
 import { NextResponse } from "next/server";
+import { getApplicationById } from "@/lib/applications";
+import { prisma } from "@/lib/prisma";
 import {
   completeRdsSyncRunLogFailure,
   completeRdsSyncRunLogSuccess,
   createRdsSyncRunLog,
   type RdsSyncSummary,
 } from "@/lib/rds-sync-log";
+import { generateInterviewQuestionsByAnswer } from "@/llm";
+import { createNotionApplicationPage } from "@/notion";
 
 const execFileAsync = promisify(execFile);
 const SYNC_SCRIPT_PATH = path.join(process.cwd(), "scripts", "sync-rds-to-local.mjs");
@@ -15,6 +19,15 @@ const SYNC_TIMEOUT_MS = 25 * 60 * 1000;
 const MAX_BUFFER_BYTES = 10 * 1024 * 1024;
 const LOG_TAIL_LINES = 20;
 const STEP_SUMMARY_PREFIX = "__RDS_SYNC_STEP_SUMMARY__";
+const LLM_GENERATION_TIMEOUT_MS = 300_000;
+const NOTION_UPSERT_TIMEOUT_MS = 90_000;
+
+type NotionAutoSyncSummary = {
+  attempted: number;
+  success: number;
+  skipped: number;
+  failed: number;
+};
 
 let runningSync:
   | {
@@ -117,7 +130,111 @@ function parseSyncSummary(stdout?: string, stderr?: string): RdsSyncSummary {
   return result;
 }
 
-async function runRdsSync(params: { trigger: string; requestedAt: Date; runId: string | null }) {
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s.`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+function buildNotionAutoSyncMessage(summary: NotionAutoSyncSummary) {
+  if (summary.attempted === 0) {
+    return "Auto Notion sync skipped (no new applications).";
+  }
+  return `Auto Notion sync completed: ${summary.success} success, ${summary.skipped} skipped, ${summary.failed} failed (total ${summary.attempted}).`;
+}
+
+async function syncApplicationsToNotion(applicationIds: string[]): Promise<NotionAutoSyncSummary> {
+  if (applicationIds.length === 0) {
+    return { attempted: 0, success: 0, skipped: 0, failed: 0 };
+  }
+
+  let success = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const applicationId of applicationIds) {
+    const itemStartedAt = Date.now();
+    console.info("[rds-sync:notion] item started", { applicationId });
+
+    try {
+      if (!/^\d+$/.test(applicationId)) {
+        throw new Error("Invalid application_id.");
+      }
+
+      const application = await getApplicationById(BigInt(applicationId));
+      if (!application) {
+        throw new Error("Application not found.");
+      }
+
+      if (application.isSyncedToNotion) {
+        skipped += 1;
+        console.info("[rds-sync:notion] item skipped", {
+          applicationId,
+          elapsedMs: Date.now() - itemStartedAt,
+        });
+        continue;
+      }
+
+      const generated = await withTimeout(
+        generateInterviewQuestionsByAnswer(application, { questionCount: 3 }),
+        LLM_GENERATION_TIMEOUT_MS,
+        "LLM interview question generation",
+      );
+
+      await withTimeout(
+        createNotionApplicationPage(application, generated),
+        NOTION_UPSERT_TIMEOUT_MS,
+        "Notion page upsert",
+      );
+
+      await prisma.application.update({
+        where: { application_id: BigInt(applicationId) },
+        data: {
+          is_synced_to_notion: true,
+          notion_synced_at: new Date(),
+        },
+      });
+
+      success += 1;
+      console.info("[rds-sync:notion] item succeeded", {
+        applicationId,
+        elapsedMs: Date.now() - itemStartedAt,
+      });
+    } catch (error) {
+      failed += 1;
+      console.error("[rds-sync:notion] item failed", {
+        applicationId,
+        elapsedMs: Date.now() - itemStartedAt,
+        error: error instanceof Error ? error.message : error,
+      });
+    }
+  }
+
+  const summary: NotionAutoSyncSummary = {
+    attempted: applicationIds.length,
+    success,
+    skipped,
+    failed,
+  };
+  console.info("[rds-sync:notion] batch completed", summary);
+  return summary;
+}
+
+async function runRdsSync(params: {
+  trigger: string;
+  requestedAt: Date;
+  runId: string | null;
+  enableNotionAutoSync: boolean;
+}) {
   const startedAt = Date.now();
   const startedAtIso = new Date(startedAt).toISOString();
 
@@ -129,6 +246,15 @@ async function runRdsSync(params: { trigger: string; requestedAt: Date; runId: s
     });
     const completedAt = new Date();
     const syncSummary = parseSyncSummary(stdout, stderr);
+    const notionSyncSummary = params.enableNotionAutoSync
+      ? await syncApplicationsToNotion(syncSummary.applications.ids)
+      : undefined;
+    if (notionSyncSummary) {
+      console.info("[rds-sync:notion] summary", {
+        ...notionSyncSummary,
+        message: buildNotionAutoSyncMessage(notionSyncSummary),
+      });
+    }
     const stdoutTail = tailLines(stdout);
     const stderrTail = tailLines(stderr);
     const durationMs = Date.now() - startedAt;
@@ -159,6 +285,7 @@ async function runRdsSync(params: { trigger: string; requestedAt: Date; runId: s
       completedAt: completedAt.toISOString(),
       durationMs,
       syncSummary,
+      ...(notionSyncSummary ? { notionSyncSummary } : {}),
       stdoutTail,
       stderrTail,
     });
@@ -216,7 +343,7 @@ async function runRdsSync(params: { trigger: string; requestedAt: Date; runId: s
   }
 }
 
-async function handleSync(trigger: string) {
+async function handleSync(trigger: string, enableNotionAutoSync: boolean) {
   const requestedAt = new Date();
 
   if (runningSync) {
@@ -253,6 +380,7 @@ async function handleSync(trigger: string) {
       trigger,
       requestedAt,
       runId,
+      enableNotionAutoSync,
     });
   } finally {
     runningSync = null;
@@ -260,12 +388,12 @@ async function handleSync(trigger: string) {
 }
 
 export async function POST() {
-  return handleSync("manual");
+  return handleSync("manual", false);
 }
 
 export async function GET(request: Request) {
   if (!ensureCronAuthorized(request)) {
     return NextResponse.json({ message: "Unauthorized cron request." }, { status: 401 });
   }
-  return handleSync("cron");
+  return handleSync("cron", true);
 }

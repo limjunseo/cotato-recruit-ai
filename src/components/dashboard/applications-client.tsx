@@ -149,13 +149,28 @@ export function ApplicationsClient() {
       const payload = await triggerProdRdsPull();
       const completedAt = payload.completedAt ?? new Date().toISOString();
       const syncSummary = payload.syncSummary ?? null;
+      const pulledApplicationIds = syncSummary?.applications.ids ?? [];
       setLastRdsPullAt(completedAt);
       setLatestSyncSummary(syncSummary);
-      setRdsPullMessage(
-        syncSummary
-          ? `${payload.message} (${formatDuration(payload.durationMs)}) | ${formatSyncCounts(syncSummary)}`
-          : `${payload.message} (${formatDuration(payload.durationMs)})`,
-      );
+      const baseMessage = syncSummary
+        ? `${payload.message} (${formatDuration(payload.durationMs)}) | ${formatSyncCounts(syncSummary)}`
+        : `${payload.message} (${formatDuration(payload.durationMs)})`;
+
+      let autoSendMessage = "Auto Notion sync skipped (no new applications).";
+
+      if (pulledApplicationIds.length > 0) {
+        const autoSelectedMap = pulledApplicationIds.reduce<typeof selectedMap>((acc, applicationId) => {
+          acc[applicationId] = {
+            applicationId,
+            name: `Application #${applicationId}`,
+          };
+          return acc;
+        }, {});
+        const autoSendResult = await sendSelectedToNotion(autoSelectedMap);
+        autoSendMessage = `Auto Notion sync completed: ${autoSendResult.success} success, ${autoSendResult.skipped} skipped, ${autoSendResult.failed} failed (total ${autoSendResult.total}).`;
+      }
+
+      setRdsPullMessage(`${baseMessage} | ${autoSendMessage}`);
 
       setFilters((prev) => ({ ...prev }));
 
@@ -227,6 +242,19 @@ export function ApplicationsClient() {
 
           {rdsPullError && (
             <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{rdsPullError}</div>
+          )}
+
+          {batchProgress.isRunning && (
+            <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-3 text-xs text-cyan-900">
+              <p className="font-semibold">Auto Notion Sync Progress</p>
+              <p className="mt-1">
+                {batchProgress.processed}/{batchProgress.total} ({progressPercent}%)
+              </p>
+              <p className="mt-1">
+                success {batchProgress.success}, skipped {batchProgress.skipped}, failed {batchProgress.failed}
+              </p>
+              {batchProgress.currentName && <p className="mt-1">current: {batchProgress.currentName}</p>}
+            </div>
           )}
 
           {latestSyncSummary && (

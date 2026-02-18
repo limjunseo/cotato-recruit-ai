@@ -37,9 +37,18 @@ export function useNotionBatch() {
     }
   };
 
-  const sendSelectedToNotion = async (selectedMap: SelectedApplicationMap) => {
+  const sendSelectedToNotion = async (
+    selectedMap: SelectedApplicationMap,
+  ): Promise<{ total: number; success: number; skipped: number; failed: number }> => {
     const targets = Object.values(selectedMap);
-    if (targets.length === 0 || batchProgress.isRunning) return;
+    if (targets.length === 0 || batchProgress.isRunning) {
+      return {
+        total: targets.length,
+        success: 0,
+        skipped: 0,
+        failed: 0,
+      };
+    }
     const batchStartedAt = Date.now();
     console.info("[batch-send] batch started", { total: targets.length });
 
@@ -152,6 +161,13 @@ export function useNotionBatch() {
       failed,
       elapsedMs: Date.now() - batchStartedAt,
     });
+
+    return {
+      total: targets.length,
+      success,
+      skipped,
+      failed,
+    };
   };
 
   return {

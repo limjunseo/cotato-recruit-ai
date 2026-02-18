@@ -22,6 +22,13 @@ export type RdsSyncSummary = {
   answers: RdsSyncSummaryGroup;
 };
 
+export type NotionAutoSyncSummary = {
+  attempted: number;
+  success: number;
+  skipped: number;
+  failed: number;
+};
+
 export type RdsSyncResponse = {
   message: string;
   trigger: "manual" | "cron" | string;
@@ -32,6 +39,7 @@ export type RdsSyncResponse = {
   failedAt?: string;
   durationMs: number;
   syncSummary?: RdsSyncSummary;
+  notionSyncSummary?: NotionAutoSyncSummary;
   stdoutTail?: string[];
   stderrTail?: string[];
 };
