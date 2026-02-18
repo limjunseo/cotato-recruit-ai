@@ -10,6 +10,8 @@ Next.js App Router 기반의 내부 운영용 대시보드입니다.
 - AI 면접 질문 생성 (LLM provider 선택: local 또는 Gemini)
 - 지원서 상세에서 AI 질문 생성 후 노션 전송
 - 운영 RDS -> 로컬 DB 배치 동기화 (`application_id` 기준 신규 insert)
+- 대시보드에서 `Prod RDS Pull` 수동 실행 버튼
+- 30분 주기 자동 크론 동기화 (`GET /api/rds-sync`)
 - 노션 이관 전 검토 단계에 맞춘 MVP 구조
 
 ## 기술 스택
@@ -53,6 +55,7 @@ cp .env.example .env
 - `NOTION_DATABASE_ID_DE` (디자인)
 - `NOTION_DATABASE_ID_FE` (프론트)
 - `NOTION_DATABASE_ID_PM` (기획)
+- `CRON_SECRET` (`GET /api/rds-sync` 보호용, 설정 시 Bearer 인증 필요)
 
 예시:
 
@@ -62,6 +65,7 @@ SOURCE_DATABASE_URL="mysql://readonly:YOUR_PASSWORD@YOUR_RDS_HOST:3306/recruitme
 RDS_SYNC_BATCH_SIZE="200"
 RDS_SYNC_MAX_BATCHES="0"
 RDS_SYNC_START_AFTER_ID="0"
+CRON_SECRET=""
 LLM_PROVIDER="local"
 LOCAL_LLM_ENDPOINT="http://127.0.0.1:11434/v1"
 LOCAL_LLM_MODEL="gemma3:12b"
@@ -114,6 +118,11 @@ npm run db:sync:rds
 - `db:sync:rds:answers`: 로컬 `applications` 기준으로 필요한 `application_answers`(answer content 포함) insert
 - `db:sync:rds`: 위 3개를 순서대로 실행
 - 신규 지원서는 `is_synced_to_notion=false`, `notion_synced_at=null`로 저장
+- UI에서 `Prod RDS Pull` 버튼으로 동일 동작을 수동 실행 가능
+
+자동 크론:
+- `vercel.json`에 `*/30 * * * *`로 `/api/rds-sync` 등록
+- `GET /api/rds-sync`는 `CRON_SECRET`이 설정되어 있으면 `Authorization: Bearer <CRON_SECRET>` 필요
 
 `applications`는 노션 동기화에 필요한 최소 컬럼만 조회/저장합니다.
 - `application_id`, `generation_id`, `user_id`, `name`
@@ -127,6 +136,8 @@ npm run db:sync:rds
 - `GET /api/applications/:id`
 - `POST /api/applications/:id/interview-questions`
 - `POST /api/applications/:id/notion`
+- `POST /api/rds-sync` (수동 트리거)
+- `GET /api/rds-sync` (크론 트리거)
 
 ## 필터 파라미터 (`GET /api/applications`)
 

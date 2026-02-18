@@ -3,7 +3,12 @@ import {
   DEFAULT_BATCH_QUESTION_COUNT,
 } from "@/components/dashboard/applications/constants";
 import { buildQueryString, parseApiError } from "@/components/dashboard/applications/utils";
-import type { NotionSendResponse, NotionSyncStatsResponse } from "@/components/dashboard/applications/types";
+import type {
+  NotionSendResponse,
+  NotionSyncStatsResponse,
+  RdsSyncLogsResponse,
+  RdsSyncResponse,
+} from "@/components/dashboard/applications/types";
 import type { ApplicationFilters, ApplicationListItem, ApplicationListResponse } from "@/types/application";
 
 const BATCH_SEND_TIMEOUT_MS = 300_000;
@@ -75,6 +80,32 @@ export async function fetchNotionSyncStats(signal?: AbortSignal): Promise<Notion
   }
 
   return (await response.json()) as NotionSyncStatsResponse;
+}
+
+export async function triggerProdRdsPull(): Promise<RdsSyncResponse> {
+  const response = await fetch("/api/rds-sync", {
+    method: "POST",
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseApiError(response, "Failed to pull from production RDS."));
+  }
+
+  return (await response.json()) as RdsSyncResponse;
+}
+
+export async function fetchRdsSyncLogs(limit = 10, signal?: AbortSignal): Promise<RdsSyncLogsResponse> {
+  const response = await fetch(`/api/rds-sync/logs?limit=${limit}`, {
+    cache: "no-store",
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseApiError(response, "Failed to load RDS sync logs."));
+  }
+
+  return (await response.json()) as RdsSyncLogsResponse;
 }
 
 export async function sendApplicationToNotion(

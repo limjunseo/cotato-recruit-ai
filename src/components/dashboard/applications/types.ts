@@ -11,6 +11,51 @@ export type NotionSyncStatsResponse = {
   notionSyncedApplicants: number;
 };
 
+export type RdsSyncSummaryGroup = {
+  count: number;
+  ids: string[];
+};
+
+export type RdsSyncSummary = {
+  applications: RdsSyncSummaryGroup;
+  questions: RdsSyncSummaryGroup;
+  answers: RdsSyncSummaryGroup;
+};
+
+export type RdsSyncResponse = {
+  message: string;
+  trigger: "manual" | "cron" | string;
+  runId?: string | null;
+  requestedAt?: string;
+  startedAt: string;
+  completedAt?: string;
+  failedAt?: string;
+  durationMs: number;
+  syncSummary?: RdsSyncSummary;
+  stdoutTail?: string[];
+  stderrTail?: string[];
+};
+
+export type RdsSyncLogItem = {
+  runId: string;
+  trigger: string;
+  status: "RUNNING" | "SUCCESS" | "FAILED" | string;
+  requestedAt: string;
+  startedAt: string;
+  completedAt: string | null;
+  durationMs: number | null;
+  message: string | null;
+  syncSummary: RdsSyncSummary;
+  stdoutTail: string[];
+  stderrTail: string[];
+  errorCode: string | null;
+  errorSignal: string | null;
+};
+
+export type RdsSyncLogsResponse = {
+  items: RdsSyncLogItem[];
+};
+
 export type SelectedApplication = {
   applicationId: string;
   name: string;

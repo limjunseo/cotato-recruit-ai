@@ -1,17 +1,18 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle, RefreshCw } from "lucide-react";
 import { BatchSendPanel } from "@/components/dashboard/applications/batch-send-panel";
 import { ApplicationsFiltersCard } from "@/components/dashboard/applications/applications-filters-card";
 import { ApplicationsListCard } from "@/components/dashboard/applications/applications-list-card";
 import { NotionSyncStatsCard } from "@/components/dashboard/applications/notion-sync-stats-card";
-import { fetchNotionSyncStats } from "@/components/dashboard/applications/services";
-import type { NotionSyncStatsResponse } from "@/components/dashboard/applications/types";
+import { fetchNotionSyncStats, fetchRdsSyncLogs, triggerProdRdsPull } from "@/components/dashboard/applications/services";
+import type { NotionSyncStatsResponse, RdsSyncLogItem, RdsSyncSummary } from "@/components/dashboard/applications/types";
 import { buildSelectionScopeKey } from "@/components/dashboard/applications/utils";
 import { useApplicationSelection } from "@/components/dashboard/applications/use-application-selection";
 import { useApplicationsData } from "@/components/dashboard/applications/use-applications-data";
 import { useNotionBatch } from "@/components/dashboard/applications/use-notion-batch";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function ApplicationsClient() {
@@ -20,6 +21,14 @@ export function ApplicationsClient() {
   const [syncStats, setSyncStats] = useState<NotionSyncStatsResponse | null>(null);
   const [syncStatsLoading, setSyncStatsLoading] = useState(true);
   const [syncStatsError, setSyncStatsError] = useState<string | null>(null);
+  const [rdsPullLoading, setRdsPullLoading] = useState(false);
+  const [rdsPullMessage, setRdsPullMessage] = useState<string | null>(null);
+  const [rdsPullError, setRdsPullError] = useState<string | null>(null);
+  const [latestSyncSummary, setLatestSyncSummary] = useState<RdsSyncSummary | null>(null);
+  const [lastRdsPullAt, setLastRdsPullAt] = useState<string | null>(null);
+  const [rdsSyncLogs, setRdsSyncLogs] = useState<RdsSyncLogItem[]>([]);
+  const [rdsSyncLogsLoading, setRdsSyncLogsLoading] = useState(true);
+  const [rdsSyncLogsError, setRdsSyncLogsError] = useState<string | null>(null);
 
   const scopeKey = useMemo(() => buildSelectionScopeKey(filters), [filters]);
   const {
@@ -36,6 +45,26 @@ export function ApplicationsClient() {
   const totalLabel = `${total.toLocaleString()}명`;
   const hasItems = items.length > 0;
   const allCurrentPageSelected = isAllCurrentPageSelected(items);
+  const isPullDisabled = rdsPullLoading || batchProgress.isRunning || isSelectingFiltered;
+
+  const formatDuration = (durationMs: number) => `${(durationMs / 1000).toFixed(1)}s`;
+  const formatDateTime = (iso: string) =>
+    new Date(iso).toLocaleString(undefined, {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+  const formatSyncIdPreview = (ids: string[], previewLimit = 20) => {
+    if (ids.length === 0) return "-";
+    if (ids.length <= previewLimit) return ids.join(", ");
+    return `${ids.slice(0, previewLimit).join(", ")}, ... (+${ids.length - previewLimit})`;
+  };
+  const formatSyncCounts = (summary: RdsSyncSummary) =>
+    `applications ${summary.applications.count}, questions ${summary.questions.count}, answers ${summary.answers.count}`;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -58,6 +87,30 @@ export function ApplicationsClient() {
     };
 
     void loadStats();
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadLogs = async () => {
+      setRdsSyncLogsLoading(true);
+      setRdsSyncLogsError(null);
+
+      try {
+        const payload = await fetchRdsSyncLogs(10, controller.signal);
+        setRdsSyncLogs(payload.items);
+      } catch (logsError) {
+        if (controller.signal.aborted) return;
+        setRdsSyncLogsError(logsError instanceof Error ? logsError.message : "Failed to load RDS sync logs.");
+      } finally {
+        if (!controller.signal.aborted) {
+          setRdsSyncLogsLoading(false);
+        }
+      }
+    };
+
+    void loadLogs();
     return () => controller.abort();
   }, []);
 
@@ -84,6 +137,56 @@ export function ApplicationsClient() {
     }
   };
 
+  const handleProdRdsPull = async () => {
+    if (isPullDisabled) return;
+
+    setRdsPullLoading(true);
+    setRdsPullError(null);
+    setRdsPullMessage(null);
+    setLatestSyncSummary(null);
+
+    try {
+      const payload = await triggerProdRdsPull();
+      const completedAt = payload.completedAt ?? new Date().toISOString();
+      const syncSummary = payload.syncSummary ?? null;
+      setLastRdsPullAt(completedAt);
+      setLatestSyncSummary(syncSummary);
+      setRdsPullMessage(
+        syncSummary
+          ? `${payload.message} (${formatDuration(payload.durationMs)}) | ${formatSyncCounts(syncSummary)}`
+          : `${payload.message} (${formatDuration(payload.durationMs)})`,
+      );
+
+      setFilters((prev) => ({ ...prev }));
+
+      try {
+        setSyncStatsLoading(true);
+        setSyncStatsError(null);
+        const stats = await fetchNotionSyncStats();
+        setSyncStats(stats);
+      } catch (statsError) {
+        setSyncStatsError(statsError instanceof Error ? statsError.message : "Failed to refresh stats.");
+      } finally {
+        setSyncStatsLoading(false);
+      }
+
+      try {
+        setRdsSyncLogsLoading(true);
+        setRdsSyncLogsError(null);
+        const logsPayload = await fetchRdsSyncLogs(10);
+        setRdsSyncLogs(logsPayload.items);
+      } catch (logsError) {
+        setRdsSyncLogsError(logsError instanceof Error ? logsError.message : "Failed to refresh RDS sync logs.");
+      } finally {
+        setRdsSyncLogsLoading(false);
+      }
+    } catch (pullError) {
+      setRdsPullError(pullError instanceof Error ? pullError.message : "Failed to pull from production RDS.");
+    } finally {
+      setRdsPullLoading(false);
+    }
+  };
+
   return (
     <section className="space-y-6">
       <NotionSyncStatsCard
@@ -92,6 +195,94 @@ export function ApplicationsClient() {
         isLoading={syncStatsLoading}
         error={syncStatsError}
       />
+
+      <Card>
+        <CardHeader>
+          <div>
+            <CardTitle className="text-xl">Prod RDS Pull</CardTitle>
+            <CardDescription>Manually pull latest submitted applications from production RDS.</CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" size="sm" disabled={isPullDisabled} onClick={handleProdRdsPull}>
+              {rdsPullLoading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {rdsPullLoading ? "Pulling..." : "Pull From Prod RDS"}
+            </Button>
+
+            {lastRdsPullAt && (
+              <span className="text-xs text-[color:var(--muted-foreground)]">
+                Last success: {formatDateTime(lastRdsPullAt)}
+              </span>
+            )}
+          </div>
+
+          <p className="text-xs text-[color:var(--muted-foreground)]">Auto cron runs every 30 minutes.</p>
+
+          {rdsPullMessage && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+              {rdsPullMessage}
+            </div>
+          )}
+
+          {rdsPullError && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{rdsPullError}</div>
+          )}
+
+          {latestSyncSummary && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+              <p className="font-semibold text-slate-900">Last pull inserted IDs</p>
+              <p className="mt-1">
+                applications ({latestSyncSummary.applications.count}):{" "}
+                {formatSyncIdPreview(latestSyncSummary.applications.ids)}
+              </p>
+              <p className="mt-1">
+                questions ({latestSyncSummary.questions.count}): {formatSyncIdPreview(latestSyncSummary.questions.ids)}
+              </p>
+              <p className="mt-1">
+                answers ({latestSyncSummary.answers.count}): {formatSyncIdPreview(latestSyncSummary.answers.ids)}
+              </p>
+            </div>
+          )}
+
+          <div className="rounded-xl border border-slate-200 bg-white p-3">
+            <p className="text-xs font-semibold text-slate-900">Recent sync logs (saved in local DB)</p>
+
+            {rdsSyncLogsLoading && (
+              <p className="mt-2 flex items-center gap-2 text-xs text-[color:var(--muted-foreground)]">
+                <LoaderCircle className="h-3 w-3 animate-spin" />
+                Loading logs...
+              </p>
+            )}
+
+            {rdsSyncLogsError && !rdsSyncLogsLoading && (
+              <p className="mt-2 text-xs text-rose-700">{rdsSyncLogsError}</p>
+            )}
+
+            {!rdsSyncLogsLoading && !rdsSyncLogsError && rdsSyncLogs.length === 0 && (
+              <p className="mt-2 text-xs text-[color:var(--muted-foreground)]">No sync logs yet.</p>
+            )}
+
+            {!rdsSyncLogsLoading && !rdsSyncLogsError && rdsSyncLogs.length > 0 && (
+              <div className="mt-2 space-y-2">
+                {rdsSyncLogs.map((log) => (
+                  <div key={log.runId} className="rounded-lg border border-slate-100 bg-slate-50 p-2 text-xs text-slate-700">
+                    <p>
+                      {formatDateTime(log.requestedAt)} | {log.trigger} | {log.status} |{" "}
+                      {log.durationMs !== null ? formatDuration(log.durationMs) : "-"}
+                    </p>
+                    <p className="mt-1">
+                      applications {log.syncSummary.applications.count}, questions {log.syncSummary.questions.count}, answers{" "}
+                      {log.syncSummary.answers.count}
+                    </p>
+                    <p className="mt-1">application IDs: {formatSyncIdPreview(log.syncSummary.applications.ids, 12)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <ApplicationsFiltersCard filters={filters} totalLabel={totalLabel} onChangeFilters={setFilters} />
 
