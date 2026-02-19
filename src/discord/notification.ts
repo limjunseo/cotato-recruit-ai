@@ -4,13 +4,13 @@ const MAX_PREVIEW_ITEMS = 1;
 const MAX_ANSWER_PREVIEW_LENGTH = 280;
 const MAX_SUMMARY_PREVIEW_LENGTH = 1000;
 const DISCORD_TIMEOUT_MS = 10_000;
-const DISCORD_MAX_CONTENT_LENGTH = 2000;
 const DISCORD_MAX_EMBEDS = 10;
 const DISCORD_MAX_EMBED_DESCRIPTION_LENGTH = 4096;
 const DISCORD_MAX_EMBED_FIELD_NAME_LENGTH = 256;
 const DISCORD_MAX_EMBED_FIELD_VALUE_LENGTH = 1024;
 const DISCORD_EMBED_COLOR = 0x3f8cff;
 const CONTENT_BASE_TEXT = "Notion sync completed.";
+const DISCORD_NOTIFICATIONS_ENABLED = process.env.ENABLE_DISCORD_NOTIFICATIONS?.trim() === "true";
 
 export type NotionSyncTrigger = "cron" | "rds-pull" | "dashboard-batch" | "manual";
 
@@ -88,37 +88,6 @@ function buildTruncatedText(value: string | null | undefined, maxLength: number)
     isTruncated: true,
     omittedChars: Math.max(0, normalized.length - keepLength),
   };
-}
-
-function escapeForSpoiler(value: string): string {
-  return value.replace(/\|\|/g, "\\|\\|");
-}
-
-function buildContentWithSpoiler(fullAnswer: string | null | undefined): string {
-  const normalized = compactWhitespace(fullAnswer ?? "");
-  if (!normalized) return CONTENT_BASE_TEXT;
-
-  const header = "Full Answer (Spoiler)";
-  const escaped = escapeForSpoiler(normalized);
-  const wrapperLength = `${CONTENT_BASE_TEXT}\n\n${header}\n||||`.length;
-  const maxSpoilerBodyLength = Math.max(0, DISCORD_MAX_CONTENT_LENGTH - wrapperLength);
-
-  if (escaped.length <= maxSpoilerBodyLength) {
-    return `${CONTENT_BASE_TEXT}\n\n${header}\n||${escaped}||`;
-  }
-
-  const omittedTemplate = "\n(omitted 0 chars due to Discord content limit)";
-  const noteReserved = omittedTemplate.length;
-  const maxBodyWithNote = Math.max(0, maxSpoilerBodyLength - noteReserved);
-  const keepLength = Math.max(0, maxBodyWithNote - 3);
-  const preview = `${escaped.slice(0, keepLength)}...`;
-  const omittedChars = Math.max(0, escaped.length - keepLength);
-  const note = `\n(omitted ${omittedChars} chars due to Discord content limit)`;
-
-  const content = `${CONTENT_BASE_TEXT}\n\n${header}\n||${preview}||${note}`;
-  if (content.length <= DISCORD_MAX_CONTENT_LENGTH) return content;
-
-  return `${CONTENT_BASE_TEXT}\n\n${header}\n||...||\n(omitted due to Discord content limit)`;
 }
 
 function toDiscordTimestamp(iso: string | null): string | undefined {
@@ -210,11 +179,8 @@ function buildMessagePayload(params: SendDiscordNotionSyncNotificationParams): D
     fields: [
       buildField("Question", questionTitle),
       buildField("Answer (Preview)", answerPreview.text),
-      ...(answerPreview.isTruncated
-        ? [buildField("Answer Omitted", `... ${answerPreview.omittedChars} chars omitted`)]
-        : []),
       buildField("Summary", summaryPreview),
-      ...(omittedCount > 0 ? [buildField("Other Q/A", `${omittedCount} more Q/A summaries omitted`)] : []),
+      ...(omittedCount > 0 ? [buildField("추가 응답 ", `${omittedCount}개가 있어요.`)] : []),
     ],
   });
 
@@ -227,7 +193,7 @@ function buildMessagePayload(params: SendDiscordNotionSyncNotificationParams): D
 
   aiChunksToSend.forEach((chunk, index) => {
     embeds.push({
-      title: aiChunksToSend.length > 1 ? `AI Questions (${index + 1}/${aiChunksToSend.length})` : "AI Questions",
+      title: aiChunksToSend.length > 1 ? `AI Question (${index + 1}/${aiChunksToSend.length})` : "AI Question",
       description: chunk,
       color: DISCORD_EMBED_COLOR,
     });
@@ -242,7 +208,7 @@ function buildMessagePayload(params: SendDiscordNotionSyncNotificationParams): D
   }
 
   return {
-    content: buildContentWithSpoiler(previewAnswer?.content ?? previewResult.answerContent),
+    content: CONTENT_BASE_TEXT,
     embeds,
   };
 }
@@ -281,6 +247,10 @@ async function postDiscordMessage(payload: DiscordWebhookPayload): Promise<void>
 export async function sendDiscordNotionSyncNotification(
   params: SendDiscordNotionSyncNotificationParams,
 ): Promise<boolean> {
+  if (!DISCORD_NOTIFICATIONS_ENABLED) {
+    return false;
+  }
+
   const webhookUrl = process.env.DISCORD_WEBHOOK_URL?.trim();
   if (!webhookUrl) return false;
 
