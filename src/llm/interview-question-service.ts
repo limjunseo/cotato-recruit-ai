@@ -4,10 +4,11 @@ import { createLlmRuntimeConfig } from "@/llm/client";
 import { generateQuestionsForAnswer } from "@/llm/interview-question-generator";
 
 const REQUEST_SPACING_MS = 350;
+const REQUIRED_QUESTION_COUNT = 2;
 
 function normalizeQuestionCount(questionCount: number | undefined) {
-  const candidate = questionCount ?? 3;
-  return Math.max(1, Math.min(candidate, 3));
+  void questionCount;
+  return REQUIRED_QUESTION_COUNT;
 }
 
 function sleep(ms: number) {
