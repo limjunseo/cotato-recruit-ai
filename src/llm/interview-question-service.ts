@@ -4,11 +4,20 @@ import { createLlmRuntimeConfig } from "@/llm/client";
 import { generateQuestionsForAnswer } from "@/llm/interview-question-generator";
 
 const REQUEST_SPACING_MS = 350;
-const REQUIRED_QUESTION_COUNT = 2;
+const DEFAULT_QUESTION_COUNT = 3;
+const MIN_QUESTION_COUNT = 1;
+const MAX_QUESTION_COUNT = 3;
+
+export const INTERVIEW_GENERATION_ERRORS = {
+  REQUESTED_ANSWER_NOT_FOUND: "The requested answer does not exist for this application.",
+  REQUESTED_ANSWER_EMPTY: "The requested answer is empty.",
+  NO_NON_EMPTY_ANSWERS: "No non-empty answers found for this application.",
+} as const;
 
 function normalizeQuestionCount(questionCount: number | undefined) {
-  void questionCount;
-  return REQUIRED_QUESTION_COUNT;
+  if (!Number.isFinite(questionCount)) return DEFAULT_QUESTION_COUNT;
+  const normalized = Math.trunc(questionCount as number);
+  return Math.max(MIN_QUESTION_COUNT, Math.min(normalized, MAX_QUESTION_COUNT));
 }
 
 function sleep(ms: number) {
@@ -23,13 +32,21 @@ export async function generateInterviewQuestionsByAnswer(
   const runtime = createLlmRuntimeConfig();
 
   const questionCount = normalizeQuestionCount(options?.questionCount);
-  const answers = application.answers.filter((answer) => answer.content.trim().length > 0);
-  const selectedAnswers = options?.answerId
-    ? answers.filter((answer) => answer.answerId === options.answerId)
-    : answers;
+  let selectedAnswers = application.answers.filter((answer) => answer.content.trim().length > 0);
 
-  if (options?.answerId && selectedAnswers.length === 0) {
-    throw new Error("The requested answer does not exist for this application.");
+  if (options?.answerId) {
+    const matchedAnswer = application.answers.find((answer) => answer.answerId === options.answerId);
+    if (!matchedAnswer) {
+      throw new Error(INTERVIEW_GENERATION_ERRORS.REQUESTED_ANSWER_NOT_FOUND);
+    }
+    if (matchedAnswer.content.trim().length === 0) {
+      throw new Error(INTERVIEW_GENERATION_ERRORS.REQUESTED_ANSWER_EMPTY);
+    }
+    selectedAnswers = [matchedAnswer];
+  }
+
+  if (selectedAnswers.length === 0) {
+    throw new Error(INTERVIEW_GENERATION_ERRORS.NO_NON_EMPTY_ANSWERS);
   }
 
   const results: GeneratedAnswerQuestions[] = [];

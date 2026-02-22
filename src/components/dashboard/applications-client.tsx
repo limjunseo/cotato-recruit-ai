@@ -6,8 +6,8 @@ import { BatchSendPanel } from "@/components/dashboard/applications/batch-send-p
 import { ApplicationsFiltersCard } from "@/components/dashboard/applications/applications-filters-card";
 import { ApplicationsListCard } from "@/components/dashboard/applications/applications-list-card";
 import { NotionSyncStatsCard } from "@/components/dashboard/applications/notion-sync-stats-card";
-import { fetchNotionSyncStats, fetchRdsSyncLogs, triggerProdRdsPull } from "@/components/dashboard/applications/services";
-import type { NotionSyncStatsResponse, RdsSyncLogItem, RdsSyncSummary } from "@/components/dashboard/applications/types";
+import { fetchNotionSyncStats, triggerProdRdsPull } from "@/components/dashboard/applications/services";
+import type { NotionSyncStatsResponse, RdsSyncSummary } from "@/components/dashboard/applications/types";
 import { buildSelectionScopeKey } from "@/components/dashboard/applications/utils";
 import { useApplicationSelection } from "@/components/dashboard/applications/use-application-selection";
 import { useApplicationsData } from "@/components/dashboard/applications/use-applications-data";
@@ -26,9 +26,6 @@ export function ApplicationsClient() {
   const [rdsPullError, setRdsPullError] = useState<string | null>(null);
   const [latestSyncSummary, setLatestSyncSummary] = useState<RdsSyncSummary | null>(null);
   const [lastRdsPullAt, setLastRdsPullAt] = useState<string | null>(null);
-  const [rdsSyncLogs, setRdsSyncLogs] = useState<RdsSyncLogItem[]>([]);
-  const [rdsSyncLogsLoading, setRdsSyncLogsLoading] = useState(true);
-  const [rdsSyncLogsError, setRdsSyncLogsError] = useState<string | null>(null);
 
   const scopeKey = useMemo(() => buildSelectionScopeKey(filters), [filters]);
   const {
@@ -87,30 +84,6 @@ export function ApplicationsClient() {
     };
 
     void loadStats();
-    return () => controller.abort();
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    const loadLogs = async () => {
-      setRdsSyncLogsLoading(true);
-      setRdsSyncLogsError(null);
-
-      try {
-        const payload = await fetchRdsSyncLogs(10, controller.signal);
-        setRdsSyncLogs(payload.items);
-      } catch (logsError) {
-        if (controller.signal.aborted) return;
-        setRdsSyncLogsError(logsError instanceof Error ? logsError.message : "Failed to load RDS sync logs.");
-      } finally {
-        if (!controller.signal.aborted) {
-          setRdsSyncLogsLoading(false);
-        }
-      }
-    };
-
-    void loadLogs();
     return () => controller.abort();
   }, []);
 
@@ -183,17 +156,6 @@ export function ApplicationsClient() {
         setSyncStatsError(statsError instanceof Error ? statsError.message : "Failed to refresh stats.");
       } finally {
         setSyncStatsLoading(false);
-      }
-
-      try {
-        setRdsSyncLogsLoading(true);
-        setRdsSyncLogsError(null);
-        const logsPayload = await fetchRdsSyncLogs(10);
-        setRdsSyncLogs(logsPayload.items);
-      } catch (logsError) {
-        setRdsSyncLogsError(logsError instanceof Error ? logsError.message : "Failed to refresh RDS sync logs.");
-      } finally {
-        setRdsSyncLogsLoading(false);
       }
     } catch (pullError) {
       setRdsPullError(pullError instanceof Error ? pullError.message : "Failed to pull from production RDS.");
@@ -273,42 +235,6 @@ export function ApplicationsClient() {
             </div>
           )}
 
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
-            <p className="text-xs font-semibold text-slate-900">Recent sync logs (saved in local DB)</p>
-
-            {rdsSyncLogsLoading && (
-              <p className="mt-2 flex items-center gap-2 text-xs text-[color:var(--muted-foreground)]">
-                <LoaderCircle className="h-3 w-3 animate-spin" />
-                Loading logs...
-              </p>
-            )}
-
-            {rdsSyncLogsError && !rdsSyncLogsLoading && (
-              <p className="mt-2 text-xs text-rose-700">{rdsSyncLogsError}</p>
-            )}
-
-            {!rdsSyncLogsLoading && !rdsSyncLogsError && rdsSyncLogs.length === 0 && (
-              <p className="mt-2 text-xs text-[color:var(--muted-foreground)]">No sync logs yet.</p>
-            )}
-
-            {!rdsSyncLogsLoading && !rdsSyncLogsError && rdsSyncLogs.length > 0 && (
-              <div className="mt-2 space-y-2">
-                {rdsSyncLogs.map((log) => (
-                  <div key={log.runId} className="rounded-lg border border-slate-100 bg-slate-50 p-2 text-xs text-slate-700">
-                    <p>
-                      {formatDateTime(log.requestedAt)} | {log.trigger} | {log.status} |{" "}
-                      {log.durationMs !== null ? formatDuration(log.durationMs) : "-"}
-                    </p>
-                    <p className="mt-1">
-                      applications {log.syncSummary.applications.count}, questions {log.syncSummary.questions.count}, answers{" "}
-                      {log.syncSummary.answers.count}
-                    </p>
-                    <p className="mt-1">application IDs: {formatSyncIdPreview(log.syncSummary.applications.ids, 12)}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </CardContent>
       </Card>
 

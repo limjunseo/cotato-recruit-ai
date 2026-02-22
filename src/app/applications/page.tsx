@@ -1,4 +1,8 @@
+import Link from "next/link";
+import { CalendarClock, Logs } from "lucide-react";
 import { ApplicationsClient } from "@/components/dashboard/applications-client";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +19,16 @@ export default function ApplicationsPage() {
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[color:var(--muted-foreground)]">
           AWS RDS(MySQL) 기반 지원서를 필터링하고 상세 확인 후 AI 면접 질문을 생성합니다. 노션 반영 전 검토 단계에 맞춘 MVP입니다.
         </p>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Link href="/interview-availability" className={cn(buttonVariants({ size: "sm" }))}>
+            <CalendarClock className="h-4 w-4" />
+            Interview Availability Board
+          </Link>
+          <Link href="/sync-logs" className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}>
+            <Logs className="h-4 w-4" />
+            RDS Sync Logs
+          </Link>
+        </div>
       </section>
 
       <ApplicationsClient />

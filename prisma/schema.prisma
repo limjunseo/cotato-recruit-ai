@@ -26,6 +26,7 @@ model Application {
   submitted_at          DateTime?           @map("submitted_at") @db.DateTime(6)
   pdf_file_key          String?             @map("pdf_file_key") @db.VarChar(255)
   pdf_file_url          String?             @map("pdf_file_url") @db.Text
+  unavailable_interview_times String?             @map("unavailable_interview_times") @db.Text
   is_synced_to_notion   Boolean             @default(false) @map("is_synced_to_notion")
   notion_synced_at      DateTime?           @map("notion_synced_at") @db.DateTime(6)
   answers               ApplicationAnswer[]

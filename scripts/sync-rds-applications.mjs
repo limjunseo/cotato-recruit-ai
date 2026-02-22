@@ -1,8 +1,74 @@
+import { Prisma } from "@prisma/client";
 import { createPrismaClients, disconnectPrismaClients, resolveSyncOptions } from "./rds-sync-utils.mjs";
 
 const STEP_SUMMARY_PREFIX = "__RDS_SYNC_STEP_SUMMARY__";
 
-function toApplicationInsertData(sourceApplications) {
+function normalizeUnavailableInterviewTimes(value) {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (value === null || value === undefined) return null;
+  return String(value);
+}
+
+function parseEtcData(rawEtcData) {
+  if (rawEtcData === null || rawEtcData === undefined) return null;
+
+  if (typeof rawEtcData === "string") {
+    try {
+      return JSON.parse(rawEtcData);
+    } catch {
+      return null;
+    }
+  }
+
+  if (Buffer.isBuffer(rawEtcData)) {
+    try {
+      return JSON.parse(rawEtcData.toString("utf8"));
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof rawEtcData === "object") return rawEtcData;
+  return null;
+}
+
+function extractUnavailableInterviewTimes(rawEtcData) {
+  const parsed = parseEtcData(rawEtcData);
+  if (!parsed || typeof parsed !== "object") return null;
+
+  const value = parsed.unavailableInterviewTimes;
+  return normalizeUnavailableInterviewTimes(value);
+}
+
+async function fetchUnavailableInterviewTimesMap(sourcePrisma, sourceApplicationIds) {
+  if (sourceApplicationIds.length === 0) {
+    return new Map();
+  }
+
+  const etcInfoRows = await sourcePrisma.$queryRaw`
+    SELECT application_id, etc_data
+    FROM application_etc_infos
+    WHERE application_id IN (${Prisma.join(sourceApplicationIds)})
+  `;
+
+  const unavailableInterviewTimesByApplication = new Map();
+  for (const row of etcInfoRows) {
+    const applicationId = row?.application_id;
+    if (applicationId === null || applicationId === undefined) continue;
+
+    unavailableInterviewTimesByApplication.set(
+      applicationId.toString(),
+      extractUnavailableInterviewTimes(row?.etc_data),
+    );
+  }
+
+  return unavailableInterviewTimesByApplication;
+}
+
+function toApplicationInsertData(sourceApplications, unavailableInterviewTimesByApplication) {
   return sourceApplications.map((row) => ({
     application_id: row.application_id,
     generation_id: row.generation_id,
@@ -17,6 +83,7 @@ function toApplicationInsertData(sourceApplications) {
     pass_status: row.pass_status,
     is_submitted: true,
     submitted_at: row.submitted_at,
+    unavailable_interview_times: unavailableInterviewTimesByApplication.get(row.application_id.toString()) ?? null,
     is_synced_to_notion: false,
     notion_synced_at: null,
   }));
@@ -87,8 +154,11 @@ async function syncApplicationBatch(sourcePrisma, localPrisma, cursorId, batchSi
     };
   }
 
+  const newSourceIds = newApplications.map((row) => row.application_id);
+  const unavailableInterviewTimesByApplication = await fetchUnavailableInterviewTimesMap(sourcePrisma, newSourceIds);
+
   const result = await localPrisma.application.createMany({
-    data: toApplicationInsertData(newApplications),
+    data: toApplicationInsertData(newApplications, unavailableInterviewTimesByApplication),
     skipDuplicates: true,
   });
 

@@ -50,6 +50,7 @@ cp .env.example .env
 - `GEMINI_API_KEY` (`LLM_PROVIDER=gemini`일 때 필수)
 - `GEMINI_MODEL` (기본값: `gemini-2.0-flash`)
 - `GEMINI_API_ENDPOINT` (기본값: `https://generativelanguage.googleapis.com/v1beta`)
+- `INTERVIEW_AVAILABILITY_USE_LLM_NORMALIZER` (`true/false`, 기본 `true`)
 - `NOTION_TOKEN`
 - `NOTION_DATABASE_ID_BE` (백엔드)
 - `NOTION_DATABASE_ID_DE` (디자인)
@@ -90,6 +91,7 @@ npm run db:generate
 
 ```sql
 ALTER TABLE applications
+  ADD COLUMN unavailable_interview_times TEXT NULL,
   ADD COLUMN is_synced_to_notion BOOLEAN NOT NULL DEFAULT 0,
   ADD COLUMN notion_synced_at DATETIME(6) NULL;
 ```
@@ -113,7 +115,7 @@ npm run db:sync:rds
 ```
 
 동작:
-- `db:sync:rds:applications`: 제출된 지원서(`is_submitted=true`)만 읽어 신규 `applications` insert
+- `db:sync:rds:applications`: 제출된 지원서(`is_submitted=true`)를 읽어 신규 `applications` insert + `application_etc_infos.etc_data.unavailableInterviewTimes`를 `applications.unavailable_interview_times`로 동기화
 - `db:sync:rds:questions`: 로컬 `applications` 기준으로 필요한 `questions`(question content 포함) insert
 - `db:sync:rds:answers`: 로컬 `applications` 기준으로 필요한 `application_answers`(answer content 포함) insert
 - `db:sync:rds`: 위 3개를 순서대로 실행
@@ -170,6 +172,7 @@ Prisma 모델은 아래 컬럼만 사용합니다.
 - `pass_status`
 - `pdf_file_key`
 - `pdf_file_url`
+- `unavailable_interview_times`
 - `phone_number`
 - `submitted_at`
 - `university`

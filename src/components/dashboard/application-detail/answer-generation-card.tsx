@@ -30,7 +30,7 @@ export function AnswerGenerationCard({
   onGenerateQuestions,
   onSendToNotion,
 }: Props) {
-  const hasAnswers = application.answers.length > 0;
+  const hasAnswers = application.answers.some((answer) => answer.content.trim().length > 0);
 
   return (
     <Card>
@@ -84,7 +84,9 @@ export function AnswerGenerationCard({
         )}
 
         {!hasAnswers && (
-          <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-700">No answers found for this application.</p>
+          <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-700">
+            No non-empty answers found for this application.
+          </p>
         )}
 
         {application.answers.map((answer) => {

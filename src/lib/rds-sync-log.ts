@@ -269,7 +269,7 @@ export async function completeRdsSyncRunLogFailure(params: {
 
 export async function listRdsSyncRunLogs(limit = 10): Promise<RdsSyncLogItem[]> {
   await ensureRdsSyncLogTable();
-  const safeLimit = Math.max(1, Math.min(100, limit));
+  const safeLimit = Math.max(1, Math.min(1000, limit));
   const rows = await prisma.$queryRawUnsafe<RdsSyncLogRawRow[]>(
     `
     SELECT

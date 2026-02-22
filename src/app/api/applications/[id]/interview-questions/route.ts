@@ -1,6 +1,6 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
-import { generateInterviewQuestionsByAnswer } from "@/llm";
+import { generateInterviewQuestionsByAnswer, INTERVIEW_GENERATION_ERRORS } from "@/llm";
 import { getApplicationById } from "@/lib/applications";
 
 type ParamsContext = {
@@ -50,8 +50,16 @@ export async function POST(request: Request, context: ParamsContext) {
     const results = await generateInterviewQuestionsByAnswer(application, { questionCount, answerId });
     return NextResponse.json({ results });
   } catch (error) {
-    if (error instanceof Error && error.message === "The requested answer does not exist for this application.") {
-      return NextResponse.json({ message: error.message }, { status: 404 });
+    if (error instanceof Error) {
+      if (error.message === INTERVIEW_GENERATION_ERRORS.REQUESTED_ANSWER_NOT_FOUND) {
+        return NextResponse.json({ message: error.message }, { status: 404 });
+      }
+      if (
+        error.message === INTERVIEW_GENERATION_ERRORS.REQUESTED_ANSWER_EMPTY ||
+        error.message === INTERVIEW_GENERATION_ERRORS.NO_NON_EMPTY_ANSWERS
+      ) {
+        return NextResponse.json({ message: error.message }, { status: 400 });
+      }
     }
 
     return NextResponse.json(

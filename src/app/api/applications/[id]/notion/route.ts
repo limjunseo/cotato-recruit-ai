@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getApplicationById } from "@/lib/applications";
-import { generateInterviewQuestionsByAnswer } from "@/llm";
-import { prisma } from "@/lib/prisma";
 import { sendDiscordNotionSyncNotification, type NotionSyncTrigger } from "@/discord";
+import { generateInterviewQuestionsByAnswer, INTERVIEW_GENERATION_ERRORS } from "@/llm";
+import { getApplicationById } from "@/lib/applications";
+import { prisma } from "@/lib/prisma";
 import { createNotionApplicationPage } from "@/notion";
 
 type ParamsContext = {
@@ -141,8 +141,16 @@ export async function POST(request: Request, context: ParamsContext) {
       elapsedMs: Date.now() - startedAt,
       error: error instanceof Error ? error.message : error,
     });
-    if (error instanceof Error && error.message === "The requested answer does not exist for this application.") {
-      return NextResponse.json({ message: error.message }, { status: 404 });
+    if (error instanceof Error) {
+      if (error.message === INTERVIEW_GENERATION_ERRORS.REQUESTED_ANSWER_NOT_FOUND) {
+        return NextResponse.json({ message: error.message }, { status: 404 });
+      }
+      if (
+        error.message === INTERVIEW_GENERATION_ERRORS.REQUESTED_ANSWER_EMPTY ||
+        error.message === INTERVIEW_GENERATION_ERRORS.NO_NON_EMPTY_ANSWERS
+      ) {
+        return NextResponse.json({ message: error.message }, { status: 400 });
+      }
     }
 
     return NextResponse.json(
