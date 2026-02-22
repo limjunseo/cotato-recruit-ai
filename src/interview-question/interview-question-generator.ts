@@ -1,11 +1,11 @@
 ﻿import type { ApplicationAnswer, ApplicationDetail } from "@/types/application";
-import type { LlmRuntimeConfig } from "@/llm/types";
+import type { LlmRuntimeConfig } from "@/interview-question/types";
 import {
   INTERVIEW_QUESTION_SYSTEM_PROMPT,
   buildInterviewQuestionRepairPrompt,
   buildInterviewQuestionUserPrompt,
-} from "@/llm/interview-question-prompts";
-import { parseInterviewGeneration } from "@/llm/parser";
+} from "@/interview-question/interview-question-prompts";
+import { parseInterviewGeneration } from "@/interview-question/parser";
 
 type GenerateForAnswerInput = {
   application: ApplicationDetail;

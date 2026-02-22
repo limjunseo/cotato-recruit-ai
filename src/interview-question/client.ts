@@ -1,6 +1,6 @@
 import OpenAI from "openai";
-import { getLlmConfig } from "@/llm/config";
-import type { LlmRuntimeConfig } from "@/llm/types";
+import { getLlmConfig } from "@/interview-question/config";
+import type { LlmRuntimeConfig } from "@/interview-question/types";
 
 export function createLlmRuntimeConfig(): LlmRuntimeConfig {
   const config = getLlmConfig();

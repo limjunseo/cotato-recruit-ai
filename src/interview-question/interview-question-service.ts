@@ -1,7 +1,7 @@
 import type { ApplicationDetail, GeneratedAnswerQuestions } from "@/types/application";
-import type { GenerateInterviewQuestionsOptions } from "@/llm/types";
-import { createLlmRuntimeConfig } from "@/llm/client";
-import { generateQuestionsForAnswer } from "@/llm/interview-question-generator";
+import type { GenerateInterviewQuestionsOptions } from "@/interview-question/types";
+import { createLlmRuntimeConfig } from "@/interview-question/client";
+import { generateQuestionsForAnswer } from "@/interview-question/interview-question-generator";
 
 const REQUEST_SPACING_MS = 350;
 const DEFAULT_QUESTION_COUNT = 3;

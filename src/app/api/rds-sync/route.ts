@@ -11,7 +11,7 @@ import {
   createRdsSyncRunLog,
   type RdsSyncSummary,
 } from "@/lib/rds-sync-log";
-import { generateInterviewQuestionsByAnswer } from "@/llm";
+import { generateInterviewQuestionsByAnswer } from "@/interview-question";
 import { createNotionApplicationPage } from "@/notion";
 
 const execFileAsync = promisify(execFile);

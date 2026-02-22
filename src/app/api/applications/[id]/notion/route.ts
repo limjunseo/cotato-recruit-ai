@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { sendDiscordNotionSyncNotification, type NotionSyncTrigger } from "@/discord";
-import { generateInterviewQuestionsByAnswer, INTERVIEW_GENERATION_ERRORS } from "@/llm";
+import { generateInterviewQuestionsByAnswer, INTERVIEW_GENERATION_ERRORS } from "@/interview-question";
 import { getApplicationById } from "@/lib/applications";
 import { prisma } from "@/lib/prisma";
 import { createNotionApplicationPage } from "@/notion";

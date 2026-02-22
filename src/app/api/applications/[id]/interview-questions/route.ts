@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { generateInterviewQuestionsByAnswer, INTERVIEW_GENERATION_ERRORS } from "@/llm";
+import { generateInterviewQuestionsByAnswer, INTERVIEW_GENERATION_ERRORS } from "@/interview-question";
 import { getApplicationById } from "@/lib/applications";
 
 type ParamsContext = {
