@@ -1,5 +1,4 @@
-import { INTERVIEW_DAYS, SLOT_MINUTES, SLOTS_PER_DAY } from "@/interview-availability/constants";
-import { createAvailabilityTextNormalizer } from "@/interview-availability/llm-normalizer";
+import { BOARD_SLOT_INDICES, INTERVIEW_DAYS, SLOT_MINUTES } from "@/interview-availability/constants";
 import { parseTextToUnavailableSlots } from "@/interview-availability/parser";
 import { fetchAvailabilityApplicants } from "@/interview-availability/repository";
 import { slotKey, buildSlots } from "@/interview-availability/slots";
@@ -15,7 +14,6 @@ type AvailabilityQueryOptions = {
 export async function getInterviewAvailability(options: AvailabilityQueryOptions = {}): Promise<InterviewAvailabilityResponse> {
   const generationId = options.generationId?.trim() ?? "";
   const applicants = await fetchAvailabilityApplicants(generationId);
-  const normalizeAvailabilityText = createAvailabilityTextNormalizer();
 
   const partStateMap = createInitialPartStateMap();
   let unavailabilityDetectedCount = 0;
@@ -26,8 +24,7 @@ export async function getInterviewAvailability(options: AvailabilityQueryOptions
     const unavailableInterviewTimes = applicant.unavailableInterviewTimes?.trim() ?? "";
 
     if (unavailableInterviewTimes.length > 0) {
-      const normalizedText = await normalizeAvailabilityText(unavailableInterviewTimes);
-      parseTextToUnavailableSlots(normalizedText, unavailableSlots);
+      parseTextToUnavailableSlots(unavailableInterviewTimes, unavailableSlots);
     }
 
     if (unavailableSlots.size > 0) {
@@ -39,9 +36,10 @@ export async function getInterviewAvailability(options: AvailabilityQueryOptions
 
     for (const day of INTERVIEW_DAYS) {
       const dayCells = partState.dayCellNames[day.key];
-      for (let slotIndex = 0; slotIndex < SLOTS_PER_DAY; slotIndex += 1) {
-        if (!unavailableSlots.has(slotKey(day.key, slotIndex))) {
-          dayCells[slotIndex].push(applicantName);
+      for (let displaySlotIndex = 0; displaySlotIndex < BOARD_SLOT_INDICES.length; displaySlotIndex += 1) {
+        const absoluteSlotIndex = BOARD_SLOT_INDICES[displaySlotIndex];
+        if (!unavailableSlots.has(slotKey(day.key, absoluteSlotIndex))) {
+          dayCells[displaySlotIndex].push(applicantName);
         }
       }
     }

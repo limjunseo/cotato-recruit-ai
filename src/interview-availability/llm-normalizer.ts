@@ -1,5 +1,5 @@
-import { createLlmRuntimeConfig } from "@/llm/client";
-import type { LlmRuntimeConfig } from "@/llm/types";
+import { createLlmRuntimeConfig } from "@/interview-question/client";
+import type { LlmRuntimeConfig } from "@/interview-question/types";
 import {
   AVAILABILITY_NORMALIZER_SYSTEM_PROMPT,
   buildAvailabilityNormalizerUserPrompt,
@@ -175,9 +175,9 @@ function toCanonicalUnavailableText(payload: NormalizedPayload): string {
   return payload.entries
     .map((entry) => {
       if (entry.allDay) {
-        return `${entry.date} 불가능`;
+        return `${entry.date} 00:00~24:00`;
       }
-      return `${entry.date} ${entry.ranges.map((range) => `${range.start}~${range.end}`).join(", ")} 불가능`;
+      return `${entry.date} ${entry.ranges.map((range) => `${range.start}~${range.end}`).join(", ")}`;
     })
     .join("\n");
 }
@@ -271,6 +271,34 @@ function isLlmNormalizerEnabled() {
   const flag = process.env.INTERVIEW_AVAILABILITY_USE_LLM_NORMALIZER?.trim().toLowerCase();
   if (!flag) return true;
   return !["0", "false", "off", "no"].includes(flag);
+}
+
+export function isInterviewAvailabilityLlmEnabled() {
+  return isLlmNormalizerEnabled();
+}
+
+export function createStrictAvailabilityLlmNormalizer(): AvailabilityTextNormalizer {
+  if (!isLlmNormalizerEnabled()) {
+    throw new Error("Interview availability LLM normalizer is disabled.");
+  }
+
+  let runtime: LlmRuntimeConfig | null = null;
+  const cache = new Map<string, string>();
+
+  return async (rawText: string) => {
+    const trimmed = rawText.trim();
+    if (!trimmed) return "";
+
+    const cached = cache.get(trimmed);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    runtime ??= createLlmRuntimeConfig();
+    const normalized = await normalizeTextWithLlm(trimmed, runtime);
+    cache.set(trimmed, normalized);
+    return normalized;
+  };
 }
 
 export function createAvailabilityTextNormalizer(): AvailabilityTextNormalizer {

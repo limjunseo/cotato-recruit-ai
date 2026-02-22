@@ -40,4 +40,15 @@ export type InterviewAvailabilityResponse = {
   parts: Record<PartType, InterviewAvailabilityPartTable>;
 };
 
+export type InterviewAvailabilitySyncResponse = {
+  message: string;
+  generationId: string | null;
+  llmEnabled: boolean;
+  totalApplicants: number;
+  candidates: number;
+  skippedAlreadySynced: number;
+  success: number;
+  failed: number;
+};
+
 export const INTERVIEW_PART_TAB_ORDER: readonly PartType[] = ["PM", "DE", "BE", "FE"];

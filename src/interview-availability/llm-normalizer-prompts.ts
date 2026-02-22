@@ -1,17 +1,11 @@
 export const AVAILABILITY_NORMALIZER_SYSTEM_PROMPT = `
-당신은 면접 불가능 시간 정규화기입니다.
-사용자 자유 텍스트를 읽고, 반드시 JSON 객체만 출력하세요.
-설명 문장, 코드블럭, 마크다운을 절대 포함하지 마세요.
-`;
+You normalize interview unavailability text.
+Return JSON only, with no explanation and no markdown.
+`.trim();
 
 export function buildAvailabilityNormalizerUserPrompt(rawText: string) {
   return `
-면접 대상 날짜는 다음 3개만 허용됩니다.
-- 2/28
-- 3/1
-- 3/2
-
-입력 텍스트에서 "불가능" 일정만 추출하여 아래 JSON 스키마로 출력하세요.
+Normalize the user's text into this schema:
 
 {
   "entries": [
@@ -23,16 +17,17 @@ export function buildAvailabilityNormalizerUserPrompt(rawText: string) {
   ]
 }
 
-규칙:
-1) 불가능 정보가 없으면 {"entries": []}
-2) allDay=true 인 경우 ranges는 []
-3) allDay=false 인 경우 ranges는 1개 이상
-4) 시간은 24시간 HH:mm 고정 (예: 09:00, 15:20, 00:00)
-5) 자정 넘어가는 구간도 허용 (예: 15:00~00:00)
-6) 가능 시간 정보는 무시하고 불가능 정보만 출력
-7) 확신이 없는 내용은 제외
+Rules:
+1) Allowed dates are only: 2/28, 3/1, 3/2.
+2) Keep only unavailable times. Ignore available times.
+3) If unavailable info is missing, return {"entries":[]}.
+4) If all-day unavailable, set allDay=true and ranges=[].
+5) If partial unavailable, set allDay=false and include one or more ranges.
+6) Use 24-hour HH:mm (for example 09:00, 17:20, 00:00, 24:00).
+7) Overnight ranges are allowed (for example 15:00~00:00).
+8) Merge duplicates and keep only valid ranges.
 
-입력:
+Input:
 ${rawText}
 `.trim();
 }

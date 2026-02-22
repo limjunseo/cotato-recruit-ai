@@ -3,6 +3,14 @@ import type { InterviewDay } from "@/types/interview-availability";
 export const SLOT_MINUTES = 20;
 export const MINUTES_PER_DAY = 24 * 60;
 export const SLOTS_PER_DAY = MINUTES_PER_DAY / SLOT_MINUTES;
+export const BOARD_START_HOUR = 13;
+export const BOARD_END_HOUR = 19;
+export const BOARD_START_MINUTE = BOARD_START_HOUR * 60;
+export const BOARD_END_MINUTE = BOARD_END_HOUR * 60;
+export const BOARD_SLOT_INDICES = Array.from(
+  { length: (BOARD_END_MINUTE - BOARD_START_MINUTE) / SLOT_MINUTES },
+  (_, index) => index + BOARD_START_MINUTE / SLOT_MINUTES,
+);
 
 export type InterviewScheduleDay = InterviewDay & { month: number; day: number };
 

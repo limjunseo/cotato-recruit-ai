@@ -1,4 +1,11 @@
-import { INTERVIEW_DAYS, MINUTES_PER_DAY, SLOT_MINUTES, SLOTS_PER_DAY, DAY_KEY_TO_INDEX } from "@/interview-availability/constants";
+import {
+  BOARD_SLOT_INDICES,
+  INTERVIEW_DAYS,
+  MINUTES_PER_DAY,
+  SLOT_MINUTES,
+  SLOTS_PER_DAY,
+  DAY_KEY_TO_INDEX,
+} from "@/interview-availability/constants";
 import type { InterviewTimeSlot } from "@/types/interview-availability";
 
 function formatMinuteLabel(totalMinutes: number) {
@@ -10,8 +17,8 @@ function formatMinuteLabel(totalMinutes: number) {
 }
 
 export function buildSlots(): InterviewTimeSlot[] {
-  return Array.from({ length: SLOTS_PER_DAY }, (_, slotIndex) => {
-    const startMinute = slotIndex * SLOT_MINUTES;
+  return BOARD_SLOT_INDICES.map((absoluteSlotIndex, slotIndex) => {
+    const startMinute = absoluteSlotIndex * SLOT_MINUTES;
     return {
       slotIndex,
       label: formatMinuteLabel(startMinute),

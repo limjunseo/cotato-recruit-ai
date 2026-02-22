@@ -30,8 +30,24 @@ model Application {
   is_synced_to_notion   Boolean             @default(false) @map("is_synced_to_notion")
   notion_synced_at      DateTime?           @map("notion_synced_at") @db.DateTime(6)
   answers               ApplicationAnswer[]
+  interview_availability_normalization InterviewAvailabilityNormalization?
 
   @@map("applications")
+}
+
+model InterviewAvailabilityNormalization {
+  application_id  BigInt                                  @id @map("application_id")
+  source_text     String                                  @map("source_text") @db.Text
+  normalized_text String?                                 @map("normalized_text") @db.Text
+  status          InterviewAvailabilityNormalizationStatus @default(PENDING) @map("status")
+  synced_at       DateTime?                               @map("synced_at") @db.DateTime(6)
+  last_error      String?                                 @map("last_error") @db.Text
+  created_at      DateTime                                @default(now()) @map("created_at") @db.DateTime(6)
+  updated_at      DateTime                                @updatedAt @map("updated_at") @db.DateTime(6)
+  application     Application                             @relation(fields: [application_id], references: [application_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_interview_availability_norm_application")
+
+  @@index([status], map: "idx_interview_availability_norm_status")
+  @@map("interview_availability_normalizations")
 }
 
 model ApplicationAnswer {
@@ -71,4 +87,10 @@ enum PassStatus {
   PASS
   PENDING
   WAITLISTED
+}
+
+enum InterviewAvailabilityNormalizationStatus {
+  PENDING
+  SUCCESS
+  FAILED
 }
