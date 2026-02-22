@@ -9,3 +9,13 @@ export type NotionSendResponse = {
   pageUrl: string;
   results: GeneratedAnswerQuestions[];
 };
+
+export type InterviewAvailabilityNormalizeResponse = {
+  applicationId: string;
+  input: string;
+  output: string | null;
+  status: "PENDING" | "SUCCESS" | "FAILED";
+  syncedAt: string | null;
+  lastError: string | null;
+  skipped: boolean;
+};

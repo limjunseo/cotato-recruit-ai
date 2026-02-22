@@ -10,6 +10,7 @@ import { INTERVIEW_PART_TAB_ORDER, type InterviewAvailabilityResponse } from "@/
 
 type Props = {
   generationId: string;
+  refreshKey?: number;
 };
 
 function cellBackgroundColor(availableCount: number, maxAvailableCount: number) {
@@ -26,7 +27,7 @@ function cellBackgroundColor(availableCount: number, maxAvailableCount: number) 
   return `rgba(15, 118, 110, ${alpha.toFixed(3)})`;
 }
 
-export function InterviewAvailabilityCard({ generationId }: Props) {
+export function InterviewAvailabilityCard({ generationId, refreshKey = 0 }: Props) {
   const [selectedPart, setSelectedPart] = useState<PartType>("PM");
   const [payload, setPayload] = useState<InterviewAvailabilityResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,7 +55,7 @@ export function InterviewAvailabilityCard({ generationId }: Props) {
 
     void run();
     return () => controller.abort();
-  }, [generationId]);
+  }, [generationId, refreshKey]);
 
   const selectedTable = useMemo(() => {
     if (!payload) return null;
@@ -67,7 +68,7 @@ export function InterviewAvailabilityCard({ generationId }: Props) {
         <div>
           <CardTitle className="text-xl">Interview Availability Board</CardTitle>
           <CardDescription>
-            Applicants enter unavailable times in text. The board shows inferred available slots every 20 minutes.
+            Applicants enter unavailable times in text. The board shows inferred available slots every 20 minutes (13:00-19:00).
           </CardDescription>
         </div>
       </CardHeader>

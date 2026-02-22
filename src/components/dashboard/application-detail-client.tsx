@@ -4,6 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { AnswerGenerationCard } from "@/components/dashboard/application-detail/answer-generation-card";
+import { InterviewAvailabilityNormalizerCard } from "@/components/dashboard/application-detail/interview-availability-normalizer-card";
 import { ApplicationProfileCard } from "@/components/dashboard/application-detail/application-profile-card";
 import { useApplicationDetailAi } from "@/components/dashboard/application-detail/use-application-detail-ai";
 import { buttonVariants } from "@/components/ui/button";
@@ -42,6 +43,10 @@ export function ApplicationDetailClient({ application }: Props) {
       </motion.div>
 
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.08 }}>
+        <InterviewAvailabilityNormalizerCard application={application} />
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.16 }}>
         <AnswerGenerationCard
           application={application}
           questionCount={questionCount}

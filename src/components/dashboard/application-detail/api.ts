@@ -1,4 +1,8 @@
-import type { NotionSendResponse, QuestionsResponse } from "@/components/dashboard/application-detail/types";
+import type {
+  InterviewAvailabilityNormalizeResponse,
+  NotionSendResponse,
+  QuestionsResponse,
+} from "@/components/dashboard/application-detail/types";
 
 async function parseApiError(response: Response, fallbackMessage: string) {
   try {
@@ -50,4 +54,19 @@ export async function requestSendToNotion(params: {
   }
 
   return (await response.json()) as NotionSendResponse;
+}
+
+export async function requestNormalizeInterviewAvailability(params: {
+  applicationId: string;
+}): Promise<InterviewAvailabilityNormalizeResponse> {
+  const response = await fetch(`/api/applications/${params.applicationId}/interview-availability`, {
+    method: "POST",
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseApiError(response, "Failed to normalize interview availability."));
+  }
+
+  return (await response.json()) as InterviewAvailabilityNormalizeResponse;
 }

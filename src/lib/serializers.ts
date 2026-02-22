@@ -42,7 +42,16 @@ export function serializeApplicationList(row: Application): ApplicationListItem 
 }
 
 type ApplicationAnswerWithQuestion = ApplicationAnswer & { question: Question | null };
-type ApplicationWithAnswers = Application & { answers: ApplicationAnswerWithQuestion[] };
+type ApplicationWithAnswers = Application & {
+  answers: ApplicationAnswerWithQuestion[];
+  interview_availability_normalization: {
+    source_text: string;
+    normalized_text: string | null;
+    status: "PENDING" | "SUCCESS" | "FAILED";
+    synced_at: Date | null;
+    last_error: string | null;
+  } | null;
+};
 
 function serializeApplicationAnswer(row: ApplicationAnswerWithQuestion): ApplicationAnswerDto {
   return {
@@ -76,6 +85,16 @@ export function serializeApplicationDetail(row: ApplicationWithAnswers): Applica
     university: row.university ?? null,
     generationId: row.generation_id?.toString() ?? null,
     userId: row.user_id?.toString() ?? null,
+    unavailableInterviewTimes: row.unavailable_interview_times ?? null,
+    interviewAvailabilityNormalization: row.interview_availability_normalization
+      ? {
+          sourceText: row.interview_availability_normalization.source_text,
+          normalizedText: row.interview_availability_normalization.normalized_text,
+          status: row.interview_availability_normalization.status,
+          syncedAt: toIso(row.interview_availability_normalization.synced_at),
+          lastError: row.interview_availability_normalization.last_error,
+        }
+      : null,
     answers: row.answers.map(serializeApplicationAnswer),
   };
 }

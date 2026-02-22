@@ -41,6 +41,14 @@ export type ApplicationDetail = {
   university: string | null;
   generationId: string | null;
   userId: string | null;
+  unavailableInterviewTimes: string | null;
+  interviewAvailabilityNormalization: {
+    sourceText: string;
+    normalizedText: string | null;
+    status: "PENDING" | "SUCCESS" | "FAILED";
+    syncedAt: string | null;
+    lastError: string | null;
+  } | null;
   answers: ApplicationAnswer[];
 };
 

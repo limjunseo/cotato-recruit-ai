@@ -110,6 +110,7 @@ export async function getApplicationById(applicationId: bigint) {
   const row = await prisma.application.findUnique({
     where: { application_id: applicationId },
     include: {
+      interview_availability_normalization: true,
       answers: {
         include: {
           question: true,
