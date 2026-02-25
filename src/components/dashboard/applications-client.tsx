@@ -15,6 +15,8 @@ import { useNotionBatch } from "@/components/dashboard/applications/use-notion-b
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
+type RdsPullMode = "pull-only" | "pull-with-llm-sync";
+
 export function ApplicationsClient() {
   const { filters, setFilters, items, total, isLoading, error } = useApplicationsData();
   const [actionError, setActionError] = useState<string | null>(null);
@@ -26,6 +28,7 @@ export function ApplicationsClient() {
   const [rdsPullError, setRdsPullError] = useState<string | null>(null);
   const [latestSyncSummary, setLatestSyncSummary] = useState<RdsSyncSummary | null>(null);
   const [lastRdsPullAt, setLastRdsPullAt] = useState<string | null>(null);
+  const [rdsPullMode, setRdsPullMode] = useState<RdsPullMode>("pull-only");
 
   const scopeKey = useMemo(() => buildSelectionScopeKey(filters), [filters]);
   const {
@@ -129,21 +132,25 @@ export function ApplicationsClient() {
         ? `${payload.message} (${formatDuration(payload.durationMs)}) | ${formatSyncCounts(syncSummary)}`
         : `${payload.message} (${formatDuration(payload.durationMs)})`;
 
-      let autoSendMessage = "Auto Notion sync skipped (no new applications).";
+      let syncModeMessage = "LLM sync skipped (pull-only mode).";
 
-      if (pulledApplicationIds.length > 0) {
-        const autoSelectedMap = pulledApplicationIds.reduce<typeof selectedMap>((acc, applicationId) => {
-          acc[applicationId] = {
-            applicationId,
-            name: `Application #${applicationId}`,
-          };
-          return acc;
-        }, {});
-        const autoSendResult = await sendSelectedToNotion(autoSelectedMap, { syncTrigger: "rds-pull" });
-        autoSendMessage = `Auto Notion sync completed: ${autoSendResult.success} success, ${autoSendResult.skipped} skipped, ${autoSendResult.failed} failed (total ${autoSendResult.total}).`;
+      if (rdsPullMode === "pull-with-llm-sync") {
+        syncModeMessage = "Auto Notion sync skipped (no new applications).";
+
+        if (pulledApplicationIds.length > 0) {
+          const autoSelectedMap = pulledApplicationIds.reduce<typeof selectedMap>((acc, applicationId) => {
+            acc[applicationId] = {
+              applicationId,
+              name: `Application #${applicationId}`,
+            };
+            return acc;
+          }, {});
+          const autoSendResult = await sendSelectedToNotion(autoSelectedMap, { syncTrigger: "rds-pull" });
+          syncModeMessage = `Auto Notion sync completed: ${autoSendResult.success} success, ${autoSendResult.skipped} skipped, ${autoSendResult.failed} failed (total ${autoSendResult.total}).`;
+        }
       }
 
-      setRdsPullMessage(`${baseMessage} | ${autoSendMessage}`);
+      setRdsPullMessage(`${baseMessage} | ${syncModeMessage}`);
 
       setFilters((prev) => ({ ...prev }));
 
@@ -181,10 +188,47 @@ export function ApplicationsClient() {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-[color:var(--foreground)]">Run mode</p>
+            <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100/80 p-1 shadow-inner">
+              <button
+                type="button"
+                className={`h-9 rounded-lg px-3 text-xs font-semibold transition ${
+                  rdsPullMode === "pull-only"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+                disabled={isPullDisabled}
+                aria-pressed={rdsPullMode === "pull-only"}
+                onClick={() => setRdsPullMode("pull-only")}
+              >
+                Pull only
+              </button>
+              <button
+                type="button"
+                className={`h-9 rounded-lg px-3 text-xs font-semibold transition ${
+                  rdsPullMode === "pull-with-llm-sync"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+                disabled={isPullDisabled}
+                aria-pressed={rdsPullMode === "pull-with-llm-sync"}
+                onClick={() => setRdsPullMode("pull-with-llm-sync")}
+              >
+                Pull + LLM sync
+              </button>
+            </div>
+            <p className="text-xs text-[color:var(--muted-foreground)]">
+              {rdsPullMode === "pull-only"
+                ? "Only imports newly submitted applications from production RDS."
+                : "Imports new applications, then runs LLM question generation and Notion sync automatically."}
+            </p>
+          </div>
+
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" size="sm" disabled={isPullDisabled} onClick={handleProdRdsPull}>
               {rdsPullLoading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              {rdsPullLoading ? "Pulling..." : "Pull From Prod RDS"}
+              {rdsPullLoading ? "Pulling..." : rdsPullMode === "pull-only" ? "Pull From Prod RDS" : "Pull + LLM Sync"}
             </Button>
 
             {lastRdsPullAt && (
