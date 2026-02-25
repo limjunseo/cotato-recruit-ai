@@ -52,10 +52,8 @@ cp .env.example .env
 - `GEMINI_API_ENDPOINT` (기본값: `https://generativelanguage.googleapis.com/v1beta`)
 - `INTERVIEW_AVAILABILITY_USE_LLM_NORMALIZER` (`true/false`, 기본 `true`)
 - `NOTION_TOKEN`
-- `NOTION_DATABASE_ID_BE` (백엔드)
-- `NOTION_DATABASE_ID_DE` (디자인)
-- `NOTION_DATABASE_ID_FE` (프론트)
-- `NOTION_DATABASE_ID_PM` (기획)
+- 서류/지원서 노션 DB: `NOTION_DATABASE_ID_BE|DE|FE|PM`
+- 면접시간 Sync 노션 DB: `NOTION_INTERVIEW_DATABASE_ID_BE|DE|FE|PM`
 - `CRON_SECRET` (`GET /api/rds-sync` 보호용, 설정 시 Bearer 인증 필요)
 
 예시:
@@ -79,6 +77,10 @@ NOTION_DATABASE_ID_BE=""
 NOTION_DATABASE_ID_DE=""
 NOTION_DATABASE_ID_FE=""
 NOTION_DATABASE_ID_PM=""
+NOTION_INTERVIEW_DATABASE_ID_BE=""
+NOTION_INTERVIEW_DATABASE_ID_DE=""
+NOTION_INTERVIEW_DATABASE_ID_FE=""
+NOTION_INTERVIEW_DATABASE_ID_PM=""
 ```
 
 ## 3) Prisma Client 생성
