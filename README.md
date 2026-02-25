@@ -47,6 +47,9 @@ cp .env.example .env
 - `LOCAL_LLM_ENDPOINT` (기본값: `http://127.0.0.1:11434/v1`)
 - `LOCAL_LLM_MODEL` (기본값: `gemma3:12b`)
 - `LOCAL_LLM_API_KEY` (기본값: `ollama`)
+- `LOCAL_LLM_USE_OPENCLAW` (`true`면 OpenClaw CLI 우선 사용, 기본 `false`)
+- `OPENCLAW_WSL_BIN` (Windows에서 WSL OpenClaw 절대경로 지정 시 사용, 예: `/home/ubuntu/.npm-global/bin/openclaw`)
+- `OPENCLAW_AGENT_ID` (OpenClaw `agent` 실행 시 사용할 agent id, 기본 `main`)
 - `GEMINI_API_KEY` (`LLM_PROVIDER=gemini`일 때 필수)
 - `GEMINI_MODEL` (기본값: `gemini-2.0-flash`)
 - `GEMINI_API_ENDPOINT` (기본값: `https://generativelanguage.googleapis.com/v1beta`)
@@ -69,6 +72,9 @@ LLM_PROVIDER="local"
 LOCAL_LLM_ENDPOINT="http://127.0.0.1:11434/v1"
 LOCAL_LLM_MODEL="gemma3:12b"
 LOCAL_LLM_API_KEY="ollama"
+LOCAL_LLM_USE_OPENCLAW="false"
+OPENCLAW_WSL_BIN=""
+OPENCLAW_AGENT_ID="main"
 GEMINI_API_KEY=""
 GEMINI_MODEL="gemini-2.0-flash"
 GEMINI_API_ENDPOINT="https://generativelanguage.googleapis.com/v1beta"
