@@ -1,7 +1,7 @@
 import type { ApplicationAnswer, ApplicationDetail } from "@/types/application";
 
 export const INTERVIEW_QUESTION_SYSTEM_PROMPT =
-  "당신은 한국 개발 동아리 면접관 보조입니다. 모든 출력은 한국어로만 작성하고, 반드시 JSON 객체만 반환하세요.";
+  "당신은 개발 동아리 면접관 보조입니다. 모든 출력은 한국어로만 작성하고, 반드시 JSON 객체만 반환하세요.";
 
 export function buildInterviewQuestionUserPrompt(
   application: ApplicationDetail,
