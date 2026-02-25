@@ -99,13 +99,54 @@ function normalizeTimeToken(value: unknown): string | null {
   return isValidTimeToken(normalized) ? normalized : null;
 }
 
+function normalizeAllDayToken(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return false;
+
+  const compact = value.trim().toLowerCase();
+  if (["true", "1", "yes", "y", "on"].includes(compact)) return true;
+  if (["false", "0", "no", "n", "off"].includes(compact)) return false;
+  return false;
+}
+
 function normalizeDateToken(value: unknown): NormalizedEntry["date"] | null {
   if (typeof value !== "string") return null;
-  const compact = value.replace(/\s+/g, "");
-  if (compact === "2/28" || compact === "3/1" || compact === "3/2") {
-    return compact;
+  const compact = value.trim().replace(/\s+/g, "");
+  const normalized = compact
+    .toLowerCase()
+    .replace(/[.]/g, "/")
+    .replace(/-/g, "/")
+    .replace(/월/g, "/")
+    .replace(/일/g, "");
+
+  const match = normalized.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (!match) return null;
+
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  if (!Number.isInteger(month) || !Number.isInteger(day)) return null;
+
+  const token = `${month}/${day}`;
+  if (token === "2/28" || token === "3/1" || token === "3/2") {
+    return token;
   }
   return null;
+}
+
+function normalizeRangeToken(value: unknown): NormalizedRange | null {
+  if (typeof value === "string") {
+    const match = value.trim().match(/(\d{1,2}:\d{2})\s*[~\-]\s*(\d{1,2}:\d{2})/);
+    if (!match) return null;
+    const start = normalizeTimeToken(match[1]);
+    const end = normalizeTimeToken(match[2]);
+    if (!start || !end) return null;
+    return { start, end };
+  }
+
+  const start = normalizeTimeToken((value as { start?: unknown })?.start);
+  const end = normalizeTimeToken((value as { end?: unknown })?.end);
+  if (!start || !end) return null;
+  return { start, end };
 }
 
 function sanitizeNormalizedPayload(payload: unknown): NormalizedPayload {
@@ -120,7 +161,7 @@ function sanitizeNormalizedPayload(payload: unknown): NormalizedPayload {
     const date = normalizeDateToken((item as { date?: unknown })?.date);
     if (!date || !DATE_SET.has(date)) continue;
 
-    const allDay = Boolean((item as { allDay?: unknown })?.allDay);
+    const allDay = normalizeAllDayToken((item as { allDay?: unknown })?.allDay);
     const rawRanges = (item as { ranges?: unknown })?.ranges;
 
     if (!grouped.has(date)) {
@@ -138,10 +179,9 @@ function sanitizeNormalizedPayload(payload: unknown): NormalizedPayload {
 
     if (!Array.isArray(rawRanges)) continue;
     for (const rawRange of rawRanges) {
-      const start = normalizeTimeToken((rawRange as { start?: unknown })?.start);
-      const end = normalizeTimeToken((rawRange as { end?: unknown })?.end);
-      if (!start || !end) continue;
-      target.ranges.add(`${start}~${end}`);
+      const range = normalizeRangeToken(rawRange);
+      if (!range) continue;
+      target.ranges.add(`${range.start}~${range.end}`);
     }
   }
 
