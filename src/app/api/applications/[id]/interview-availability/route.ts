@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createStrictAvailabilityLlmNormalizer, isInterviewAvailabilityLlmEnabled } from "@/interview-availability/llm-normalizer";
 import { ensureInterviewAvailabilityNormalizationTable } from "@/interview-availability/normalization-table";
+import { syncInterviewAvailabilityCandidateByApplicationId } from "@/interview-availability/sync";
 import { prisma } from "@/lib/prisma";
 
 type ParamsContext = {
@@ -51,10 +52,11 @@ export async function POST(_: Request, context: ParamsContext) {
   }
 
   const existing = row.interview_availability_normalization;
-  const isAlreadySynced =
+  const hasReusableNormalization =
     existing?.status === "SUCCESS" && existing.source_text === input && existing.normalized_text !== null;
+  const isAlreadySyncedToNotion = hasReusableNormalization && existing.synced_at !== null;
 
-  if (isAlreadySynced) {
+  if (isAlreadySyncedToNotion) {
     return NextResponse.json({
       applicationId: row.application_id.toString(),
       input,
@@ -66,79 +68,104 @@ export async function POST(_: Request, context: ParamsContext) {
     });
   }
 
-  if (!isInterviewAvailabilityLlmEnabled()) {
-    return NextResponse.json(
-      { message: "Interview availability LLM normalizer is disabled by environment flag." },
-      { status: 400 },
-    );
+  let output = existing?.normalized_text ?? null;
+  let skipped = false;
+
+  if (hasReusableNormalization) {
+    skipped = true;
+  } else {
+    if (!isInterviewAvailabilityLlmEnabled()) {
+      return NextResponse.json(
+        { message: "Interview availability LLM normalizer is disabled by environment flag." },
+        { status: 400 },
+      );
+    }
+
+    const normalizeByLlm = createStrictAvailabilityLlmNormalizer();
+
+    try {
+      output = await normalizeByLlm(input);
+
+      await prisma.interviewAvailabilityNormalization.upsert({
+        where: { application_id: applicationId },
+        update: {
+          source_text: input,
+          normalized_text: output,
+          status: "SUCCESS",
+          synced_at: null,
+          last_error: null,
+        },
+        create: {
+          application_id: applicationId,
+          source_text: input,
+          normalized_text: output,
+          status: "SUCCESS",
+          synced_at: null,
+          last_error: null,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      await prisma.interviewAvailabilityNormalization.upsert({
+        where: { application_id: applicationId },
+        update: {
+          source_text: input,
+          normalized_text: null,
+          status: "FAILED",
+          synced_at: null,
+          last_error: message,
+        },
+        create: {
+          application_id: applicationId,
+          source_text: input,
+          normalized_text: null,
+          status: "FAILED",
+          synced_at: null,
+          last_error: message,
+        },
+      });
+
+      return NextResponse.json(
+        {
+          message,
+          applicationId: row.application_id.toString(),
+          input,
+          output: null,
+          status: "FAILED",
+          syncedAt: null,
+          lastError: message,
+          skipped: false,
+        },
+        { status: 500 },
+      );
+    }
   }
 
-  const normalizeByLlm = createStrictAvailabilityLlmNormalizer();
-
   try {
-    const output = await normalizeByLlm(input);
-    const syncedAt = new Date();
-
-    await prisma.interviewAvailabilityNormalization.upsert({
-      where: { application_id: applicationId },
-      update: {
-        source_text: input,
-        normalized_text: output,
-        status: "SUCCESS",
-        synced_at: syncedAt,
-        last_error: null,
-      },
-      create: {
-        application_id: applicationId,
-        source_text: input,
-        normalized_text: output,
-        status: "SUCCESS",
-        synced_at: syncedAt,
-        last_error: null,
-      },
-    });
+    const synced = await syncInterviewAvailabilityCandidateByApplicationId(applicationId);
 
     return NextResponse.json({
       applicationId: row.application_id.toString(),
       input,
       output,
       status: "SUCCESS",
-      syncedAt: syncedAt.toISOString(),
+      syncedAt: synced.syncedAt,
       lastError: null,
-      skipped: false,
+      skipped,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-
-    await prisma.interviewAvailabilityNormalization.upsert({
-      where: { application_id: applicationId },
-      update: {
-        source_text: input,
-        normalized_text: null,
-        status: "FAILED",
-        synced_at: null,
-        last_error: message,
-      },
-      create: {
-        application_id: applicationId,
-        source_text: input,
-        normalized_text: null,
-        status: "FAILED",
-        synced_at: null,
-        last_error: message,
-      },
-    });
-
     return NextResponse.json(
       {
         message,
         applicationId: row.application_id.toString(),
         input,
-        output: null,
-        status: "FAILED",
+        output,
+        status: "SUCCESS",
         syncedAt: null,
         lastError: message,
-        skipped: false,
+        skipped,
       },
       { status: 500 },
     );

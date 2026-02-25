@@ -41,6 +41,7 @@ export type InterviewAvailabilityResponse = {
 };
 
 export type InterviewAvailabilitySyncResponse = {
+  logs: InterviewAvailabilitySyncLog[];
   message: string;
   generationId: string | null;
   llmEnabled: boolean;
@@ -49,6 +50,23 @@ export type InterviewAvailabilitySyncResponse = {
   skippedAlreadySynced: number;
   success: number;
   failed: number;
+};
+
+export type InterviewAvailabilitySyncStatsResponse = {
+  generationId: string | null;
+  totalApplicants: number;
+  candidates: number;
+  alreadySynced: number;
+  pendingSync: number;
+};
+
+export type InterviewAvailabilitySyncLog = {
+  timestamp: string;
+  level: "INFO" | "SUCCESS" | "ERROR";
+  message: string;
+  applicationId: string | null;
+  part: PartType | null;
+  name: string | null;
 };
 
 export const INTERVIEW_PART_TAB_ORDER: readonly PartType[] = ["PM", "DE", "BE", "FE"];

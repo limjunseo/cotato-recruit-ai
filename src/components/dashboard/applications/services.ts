@@ -11,7 +11,11 @@ import type {
 } from "@/components/dashboard/applications/types";
 import type { NotionSyncTrigger } from "@/discord";
 import type { ApplicationFilters, ApplicationListItem, ApplicationListResponse } from "@/types/application";
-import type { InterviewAvailabilityResponse, InterviewAvailabilitySyncResponse } from "@/types/interview-availability";
+import type {
+  InterviewAvailabilityResponse,
+  InterviewAvailabilitySyncResponse,
+  InterviewAvailabilitySyncStatsResponse,
+} from "@/types/interview-availability";
 
 const BATCH_SEND_TIMEOUT_MS = 300_000;
 
@@ -157,6 +161,32 @@ export async function syncInterviewAvailability(generationId?: string): Promise<
   }
 
   return (await response.json()) as InterviewAvailabilitySyncResponse;
+}
+
+export async function fetchInterviewAvailabilitySyncStats(
+  generationId?: string,
+  signal?: AbortSignal,
+): Promise<InterviewAvailabilitySyncStatsResponse> {
+  const params = new URLSearchParams();
+  const trimmedGenerationId = generationId?.trim();
+
+  if (trimmedGenerationId) {
+    params.set("generationId", trimmedGenerationId);
+  }
+
+  const query = params.toString();
+  const endpoint = query ? `/api/interview-availability/sync/stats?${query}` : "/api/interview-availability/sync/stats";
+
+  const response = await fetch(endpoint, {
+    cache: "no-store",
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseApiError(response, "Failed to load interview availability sync stats."));
+  }
+
+  return (await response.json()) as InterviewAvailabilitySyncStatsResponse;
 }
 
 export async function sendApplicationToNotion(
