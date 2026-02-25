@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { ensureInterviewAvailabilityNormalizationTable } from "@/interview-availability/normalization-table";
 import type { PartType } from "@/types/application";
 
+const TARGET_PASS_STATUSES = ["PASS", "WAITLISTED"] as const;
+
 export type AvailabilityApplicantRecord = {
   applicationId: bigint;
   part: PartType;
@@ -14,6 +16,7 @@ export async function fetchAvailabilityApplicants(generationId?: string): Promis
 
   const rows = await prisma.application.findMany({
     where: {
+      pass_status: { in: [...TARGET_PASS_STATUSES] },
       ...(generationId && /^\d+$/.test(generationId) ? { generation_id: BigInt(generationId) } : {}),
     },
     select: {

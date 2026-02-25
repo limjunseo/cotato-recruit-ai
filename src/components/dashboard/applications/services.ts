@@ -140,12 +140,18 @@ export async function fetchInterviewAvailability(
   return (await response.json()) as InterviewAvailabilityResponse;
 }
 
-export async function syncInterviewAvailability(generationId?: string): Promise<InterviewAvailabilitySyncResponse> {
+export async function syncInterviewAvailability(
+  generationId?: string,
+  useLlm = false,
+): Promise<InterviewAvailabilitySyncResponse> {
   const params = new URLSearchParams();
   const trimmedGenerationId = generationId?.trim();
 
   if (trimmedGenerationId) {
     params.set("generationId", trimmedGenerationId);
+  }
+  if (useLlm) {
+    params.set("useLlm", "1");
   }
 
   const query = params.toString();

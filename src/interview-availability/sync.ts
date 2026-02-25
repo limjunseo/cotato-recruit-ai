@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { createStrictAvailabilityLlmNormalizer, isInterviewAvailabilityLlmEnabled } from "@/interview-availability/llm-normalizer";
 import { ensureInterviewAvailabilityNormalizationTable } from "@/interview-availability/normalization-table";
 import {
   buildTextPropertyValue,
@@ -12,7 +13,11 @@ import type { PartType, PassStatus } from "@/types/application";
 
 type SyncInterviewAvailabilityOptions = {
   generationId?: string;
+  useLlm?: boolean;
 };
+
+const TARGET_PASS_STATUSES: PassStatus[] = ["PASS", "WAITLISTED"];
+type AvailabilityTextNormalizer = (rawText: string) => Promise<string>;
 
 type SyncInterviewAvailabilityLogLevel = "INFO" | "SUCCESS" | "ERROR";
 
@@ -134,6 +139,54 @@ function normalizeName(value: string | null | undefined, applicationId: bigint) 
 function normalizeGenerationId(value?: string) {
   const generationId = value?.trim() ?? "";
   return generationId && /^\d+$/.test(generationId) ? generationId : "";
+}
+
+function hasReusableLlmNormalization(candidate: SyncCandidate) {
+  const existing = candidate.existing;
+  return Boolean(
+    existing &&
+      existing.status === "SUCCESS" &&
+      existing.source_text === candidate.sourceText &&
+      existing.normalized_text !== null,
+  );
+}
+
+async function applyLlmNormalization(candidate: SyncCandidate, normalizeByLlm: AvailabilityTextNormalizer) {
+  if (hasReusableLlmNormalization(candidate)) {
+    return candidate;
+  }
+
+  const normalized = await normalizeByLlm(candidate.sourceText);
+  const nextSyncedAt = candidate.existing?.synced_at ?? null;
+
+  await prisma.interviewAvailabilityNormalization.upsert({
+    where: { application_id: candidate.applicationId },
+    update: {
+      source_text: candidate.sourceText,
+      normalized_text: normalized,
+      status: "SUCCESS",
+      synced_at: nextSyncedAt,
+      last_error: null,
+    },
+    create: {
+      application_id: candidate.applicationId,
+      source_text: candidate.sourceText,
+      normalized_text: normalized,
+      status: "SUCCESS",
+      synced_at: nextSyncedAt,
+      last_error: null,
+    },
+  });
+
+  return {
+    ...candidate,
+    existing: {
+      source_text: candidate.sourceText,
+      normalized_text: normalized,
+      status: "SUCCESS",
+      synced_at: nextSyncedAt,
+    },
+  };
 }
 
 function buildSyncLog(
@@ -387,6 +440,7 @@ async function syncCandidateToNotion(candidate: SyncCandidate) {
 async function loadSyncRows(normalizedGenerationId: string) {
   return prisma.application.findMany({
     where: {
+      pass_status: { in: TARGET_PASS_STATUSES },
       ...(normalizedGenerationId ? { generation_id: BigInt(normalizedGenerationId) } : {}),
     },
     select: {
@@ -506,14 +560,24 @@ export async function syncInterviewAvailability(options: SyncInterviewAvailabili
   await ensureInterviewAvailabilityNormalizationTable();
 
   const normalizedGenerationId = normalizeGenerationId(options.generationId);
+  const useLlm = Boolean(options.useLlm);
   const logs: SyncInterviewAvailabilityLog[] = [];
 
   logs.push(
     buildSyncLog(
       "INFO",
-      `Interview time sync started. generationId=${normalizedGenerationId || "ALL"}`,
+      `Interview time sync started. generationId=${normalizedGenerationId || "ALL"}, llm=${useLlm ? "ON" : "OFF"}`,
     ),
   );
+
+  let normalizeByLlm: AvailabilityTextNormalizer | null = null;
+  if (useLlm) {
+    if (!isInterviewAvailabilityLlmEnabled()) {
+      throw new Error("Interview availability LLM normalizer is disabled by environment flag.");
+    }
+    normalizeByLlm = createStrictAvailabilityLlmNormalizer();
+    logs.push(buildSyncLog("INFO", "LLM normalization enabled for this sync run."));
+  }
 
   const rows = await loadSyncRows(normalizedGenerationId);
   const candidates = buildSyncCandidates(rows);
@@ -538,20 +602,25 @@ export async function syncInterviewAvailability(options: SyncInterviewAvailabili
   }
 
   for (const target of targets) {
-    logs.push(buildSyncLog("INFO", `Syncing ${candidateLabel(target)} to Notion...`, target));
+    let preparedTarget = target;
+    logs.push(buildSyncLog("INFO", `Syncing ${candidateLabel(preparedTarget)} to Notion...`, preparedTarget));
 
     try {
-      await syncCandidateToNotion(target);
-      await markSyncSuccess(target, new Date());
+      if (normalizeByLlm) {
+        preparedTarget = await applyLlmNormalization(preparedTarget, normalizeByLlm);
+      }
+
+      await syncCandidateToNotion(preparedTarget);
+      await markSyncSuccess(preparedTarget, new Date());
 
       success += 1;
-      logs.push(buildSyncLog("SUCCESS", `Synced ${candidateLabel(target)}.`, target));
+      logs.push(buildSyncLog("SUCCESS", `Synced ${candidateLabel(preparedTarget)}.`, preparedTarget));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await markSyncFailure(target, message);
+      await markSyncFailure(preparedTarget, message);
 
       failed += 1;
-      logs.push(buildSyncLog("ERROR", `Failed ${candidateLabel(target)}: ${message}`, target));
+      logs.push(buildSyncLog("ERROR", `Failed ${candidateLabel(preparedTarget)}: ${message}`, preparedTarget));
     }
   }
 
@@ -565,7 +634,7 @@ export async function syncInterviewAvailability(options: SyncInterviewAvailabili
   return {
     message: `Interview time sync to Notion completed: ${success} success, ${failed} failed, ${skippedAlreadySynced} skipped.`,
     generationId: normalizedGenerationId || null,
-    llmEnabled: false,
+    llmEnabled: useLlm,
     totalApplicants: rows.length,
     candidates: candidates.length,
     skippedAlreadySynced,

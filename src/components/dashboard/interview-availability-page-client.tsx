@@ -37,6 +37,7 @@ function syncLogTextClass(level: InterviewAvailabilitySyncLog["level"]) {
 export function InterviewAvailabilityPageClient({ initialGenerationId }: Props) {
   const [inputGenerationId, setInputGenerationId] = useState(initialGenerationId);
   const [appliedGenerationId, setAppliedGenerationId] = useState(initialGenerationId);
+  const [useLlmForSync, setUseLlmForSync] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
@@ -103,7 +104,7 @@ export function InterviewAvailabilityPageClient({ initialGenerationId }: Props) 
       {
         timestamp: new Date().toISOString(),
         level: "INFO",
-        message: `Sync request sent. generationId=${appliedGenerationId || "ALL"}`,
+        message: `Sync request sent. generationId=${appliedGenerationId || "ALL"}, llm=${useLlmForSync ? "ON" : "OFF"}`,
         applicationId: null,
         part: null,
         name: null,
@@ -111,7 +112,7 @@ export function InterviewAvailabilityPageClient({ initialGenerationId }: Props) 
     ]);
 
     try {
-      const result = await requestInterviewAvailabilitySync(appliedGenerationId);
+      const result = await requestInterviewAvailabilitySync(appliedGenerationId, useLlmForSync);
       setSyncMessage(result.message);
       setSyncStats({
         totalApplicants: result.totalApplicants,
@@ -159,6 +160,16 @@ export function InterviewAvailabilityPageClient({ initialGenerationId }: Props) 
           <Button type="button" size="sm" variant="secondary" onClick={clearGenerationFilter}>
             Clear
           </Button>
+          <label className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-emerald-600"
+              checked={useLlmForSync}
+              disabled={isSyncing}
+              onChange={(event) => setUseLlmForSync(event.target.checked)}
+            />
+            Use LLM
+          </label>
           <Button type="button" size="sm" variant="primary" disabled={isSyncing} onClick={runInterviewTimeSync}>
             {isSyncing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
             {isSyncing ? "Syncing Interview Time..." : "Sync Interview Time"}
