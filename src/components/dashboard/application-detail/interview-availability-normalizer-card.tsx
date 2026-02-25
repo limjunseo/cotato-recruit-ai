@@ -88,14 +88,14 @@ export function InterviewAvailabilityNormalizerCard({ application }: Props) {
       <CardHeader>
         <div>
           <CardTitle className="text-xl">Interview Unavailability LLM Extractor</CardTitle>
-          <CardDescription>Extract unavailable times for this applicant with one LLM request.</CardDescription>
+          <CardDescription>Extract unavailable times with LLM, then sync this applicant to the interview Notion DB.</CardDescription>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" onClick={handleNormalize} disabled={loading || displayedInput.length === 0}>
             {loading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {loading ? "Extracting..." : "Run LLM Extract"}
+            {loading ? "Extracting + Syncing..." : "Run LLM Extract + Sync Notion"}
           </Button>
           <span className="text-xs text-[color:var(--muted-foreground)]">status: {displayedStatus}</span>
           <span className="text-xs text-[color:var(--muted-foreground)]">syncedAt: {formatDateTime(normalizeState?.syncedAt ?? null)}</span>
